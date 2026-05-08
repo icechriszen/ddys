@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jing.ddys.DdysApplication
 import com.jing.ddys.repository.HttpUtil
+import com.jing.ddys.repository.VideoSourceAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,12 @@ class SettingsViewModel : ViewModel() {
     val networkProxySettings: StateFlow<NetworkProxySettings>
         get() = _networkSettings
 
+    private val _sourceLoggedIn =
+        MutableStateFlow(VideoSourceAuth.hasAuthCookie())
+
+    val sourceLoggedIn: StateFlow<Boolean>
+        get() = _sourceLoggedIn
+
     fun applySetting(newSettings: NetworkProxySettings) {
         val currentSettings = _networkSettings.value
         if (currentSettings == newSettings) {
@@ -31,6 +38,12 @@ class SettingsViewModel : ViewModel() {
             HttpUtil.resetOkhttpClientWithProxySettings(newSettings)
         }
         newSettings.flushToSharedPreference(_sp)
+    }
+
+    fun refreshSourceAuthState() {
+        viewModelScope.launch(Dispatchers.Default) {
+            _sourceLoggedIn.emit(VideoSourceAuth.hasAuthCookie())
+        }
     }
 
     companion object {

@@ -51,6 +51,7 @@ import com.jing.ddys.ext.showShortToast
 import com.jing.ddys.repository.HttpUtil
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
+import com.jing.ddys.repository.VideoSourceAuth
 import com.jing.ddys.setting.NetworkProxySettings
 import com.jing.ddys.setting.SettingsViewModel
 import kotlinx.coroutines.Job
@@ -294,6 +295,14 @@ class VideoPlaybackFragment : VideoSupportFragment() {
                 val newReq = req.newBuilder()
                     .header(HttpHeaders.USER_AGENT, HttpUtil.USER_AGENT)
                     .header(HttpHeaders.REFERER, HttpUtil.BASE_URL + '/')
+                    .apply {
+                        if (req.url.host == VideoSourceAuth.sourceHost()) {
+                            val cookie = VideoSourceAuth.getAuthCookieHeader()
+                            if (cookie.isNotBlank()) {
+                                header("Cookie", cookie)
+                            }
+                        }
+                    }
                     .build()
                 okHttpClient.newCall(newReq)
             }

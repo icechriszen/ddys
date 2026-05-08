@@ -14,6 +14,9 @@
     <string name="playback_history">播放历史</string>
     <string name="click_ok_del_tip">长按【ok】删除</string>
     <string name="settings_title">设置</string>
+    <string name="video_source_login_title">视频源登录</string>
+    <string name="video_source_login_ready">已保存登录状态，点击重新登录</string>
+    <string name="video_source_login_required">未登录，点击打开登录页</string>
     <string name="network_proxy_setting_none">无</string>
     <string name="network_proxy_setting_title">代理设置</string>
     <string name="button_save">保存</string>

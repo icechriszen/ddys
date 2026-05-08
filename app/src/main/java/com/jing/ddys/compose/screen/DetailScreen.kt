@@ -1,5 +1,9 @@
 package com.jing.ddys.compose.screen
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
@@ -70,16 +74,25 @@ import com.jing.ddys.detail.DetailViewModel
 import com.jing.ddys.ext.secondsToDuration
 import com.jing.ddys.playback.VideoPlaybackActivity
 import com.jing.ddys.repository.Resource
+import com.jing.ddys.repository.SourceAuthRequiredException
 import com.jing.ddys.repository.VideoCardInfo
 import com.jing.ddys.repository.VideoDetailInfo
 import com.jing.ddys.repository.VideoEpisode
 import com.jing.ddys.repository.VideoSeason
 import com.jing.ddys.room.entity.VideoHistory
+import com.jing.ddys.setting.VideoSourceLoginActivity
 import kotlinx.coroutines.launch
 
 @Composable
 fun DetailScreen(viewModel: DetailViewModel) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val sourceLoginLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK) {
+                viewModel.queryDetail()
+            }
+        }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
@@ -97,13 +110,25 @@ fun DetailScreen(viewModel: DetailViewModel) {
         return
     }
     if (videoDetailResource is Resource.Error) {
-        ErrorTip(message = videoDetailResource.message) {
+        val authRequired = videoDetailResource.exception is SourceAuthRequiredException
+        ErrorTip(
+            message = videoDetailResource.message,
+            primaryActionText = if (authRequired) stringResource(R.string.video_source_login_title) else null,
+            primaryAction = if (authRequired) {
+                {
+                    sourceLoginLauncher.launch(
+                        Intent(context, VideoSourceLoginActivity::class.java)
+                    )
+                }
+            } else {
+                null
+            }
+        ) {
             viewModel.queryDetail()
         }
         return
     }
     val videoDetail = (videoDetailResource as Resource.Success<VideoDetailInfo>).data
-    val context = LocalContext.current
     TvLazyColumn(Modifier.fillMaxSize(), verticalArrangement = spacedBy(10.dp)) {
         item { VideoInfoRow(viewModel = viewModel, videoDetail = videoDetail) }
         if (videoDetail.seasons.isNotEmpty()) {

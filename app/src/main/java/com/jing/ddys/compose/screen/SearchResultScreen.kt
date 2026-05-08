@@ -1,6 +1,10 @@
 package com.jing.ddys.compose.screen
 
+import android.app.Activity
+import android.content.Intent
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement.spacedBy
@@ -50,7 +54,9 @@ import com.jing.ddys.compose.common.Loading
 import com.jing.ddys.compose.common.appendEnd
 import com.jing.ddys.detail.DetailActivity
 import com.jing.ddys.repository.SearchResult
+import com.jing.ddys.repository.SourceAuthRequiredException
 import com.jing.ddys.search.SearchResultViewModel
+import com.jing.ddys.setting.VideoSourceLoginActivity
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -58,16 +64,36 @@ import kotlinx.coroutines.launch
 fun SearchResultScreen(viewModel: SearchResultViewModel) {
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
     val refreshState = pagingItems.loadState.refresh
+    val context = LocalContext.current
+    val sourceLoginLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK) {
+                pagingItems.retry()
+            }
+        }
     if (refreshState is LoadState.Loading) {
         Loading()
         return
     }
     if (refreshState is LoadState.Error) {
-        ErrorTip(message = "加载错误:${refreshState.error.message}") {
-            pagingItems.refresh()
+        val authRequired = refreshState.error is SourceAuthRequiredException
+        ErrorTip(
+            message = "加载错误:${refreshState.error.message}",
+            primaryActionText = if (authRequired) stringResource(R.string.video_source_login_title) else null,
+            primaryAction = if (authRequired) {
+                {
+                    sourceLoginLauncher.launch(
+                        Intent(context, VideoSourceLoginActivity::class.java)
+                    )
+                }
+            } else {
+                null
+            }
+        ) {
+            pagingItems.retry()
         }
+        return
     }
-    val context = LocalContext.current
     val gridState = rememberTvLazyGridState()
     val coroutineScope = rememberCoroutineScope()
     val titleFocusRequester = remember {

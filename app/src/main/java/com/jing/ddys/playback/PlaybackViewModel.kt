@@ -78,8 +78,12 @@ class PlaybackViewModel(
             _videoUrl.emit(Resource.Loading)
             try {
                 val subtitleJob = async {
+                    val subTitleUrl = ep.subTitleUrl
+                    if (subTitleUrl.isBlank()) {
+                        return@async ""
+                    }
                     try {
-                        HttpUtil.downloadSubtitles(videoDetail.episodes[videoIndex].subTitleUrl)
+                        HttpUtil.downloadSubtitles(subTitleUrl)
                     } catch (e: Exception) {
                         if (e is CancellationException) {
                             throw e
@@ -93,7 +97,7 @@ class PlaybackViewModel(
                 } else {
                     VideoUrl(
                         type = VideoUrlType.URL,
-                        url = Uri.parse(HttpUtil.VIDEO_BASE_URL + ep.src0)
+                        url = HttpUtil.resolveVideoUrl(ep.src0)
                     )
                 }
                 if (url.type == VideoUrlType.M3U8_TEXT) {

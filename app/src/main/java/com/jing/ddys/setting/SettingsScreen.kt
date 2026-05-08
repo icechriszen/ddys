@@ -11,6 +11,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,9 +20,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -34,6 +39,9 @@ import com.jing.ddys.R
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel) {
     val proxySettings by viewModel.networkProxySettings.collectAsState()
+    val sourceLoggedIn by viewModel.sourceLoggedIn.collectAsState()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val defaultFocusRequester = remember {
         FocusRequester()
     }
@@ -55,13 +63,25 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             }
             item {
                 Column {
+                    SettingsItem(
+                        modifier = Modifier.focusRequester(defaultFocusRequester),
+                        title = stringResource(R.string.video_source_login_title),
+                        supportText = if (sourceLoggedIn) {
+                            stringResource(R.string.video_source_login_ready)
+                        } else {
+                            stringResource(R.string.video_source_login_required)
+                        }
+                    ) {
+                        context.startActivity(
+                            android.content.Intent(context, VideoSourceLoginActivity::class.java)
+                        )
+                    }
                     val proxyText = if (proxySettings.proxyEnabled) {
                         "${proxySettings.proxyHost}:${proxySettings.proxyPort}"
                     } else {
                         stringResource(R.string.network_proxy_setting_none)
                     }
                     SettingsItem(
-                        modifier = Modifier.focusRequester(defaultFocusRequester),
                         title = stringResource(R.string.network_proxy_setting_title),
                         supportText = proxyText
                     ) {
@@ -76,6 +96,17 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         })
         LaunchedEffect(Unit) {
             defaultFocusRequester.requestFocus()
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshSourceAuthState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
     if (showProxySettingsDialog) {

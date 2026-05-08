@@ -1,5 +1,9 @@
 package com.jing.ddys.compose.screen
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,9 +59,11 @@ import com.jing.ddys.compose.common.appendEnd
 import com.jing.ddys.detail.DetailActivity
 import com.jing.ddys.history.PlayHistoryActivity
 import com.jing.ddys.main.MainViewModel
+import com.jing.ddys.repository.SourceAuthRequiredException
 import com.jing.ddys.repository.VideoCardInfo
 import com.jing.ddys.search.SearchActivity
 import com.jing.ddys.setting.SettingsActivity
+import com.jing.ddys.setting.VideoSourceLoginActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -209,13 +215,33 @@ fun VideoGrid(
     onRequestTabFocus: () -> Unit = {}
 ) {
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
+    val context = LocalContext.current
+    val sourceLoginLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK) {
+                pagingItems.retry()
+            }
+        }
     if (pagingItems.loadState.refresh is LoadState.Loading) {
         Loading()
         return
     }
     if (pagingItems.loadState.refresh is LoadState.Error) {
         val error = (pagingItems.loadState.refresh as LoadState.Error).error
-        ErrorTip(message = "加载失败:${error.message}") {
+        val authRequired = error is SourceAuthRequiredException
+        ErrorTip(
+            message = "加载失败:${error.message}",
+            primaryActionText = if (authRequired) stringResource(R.string.video_source_login_title) else null,
+            primaryAction = if (authRequired) {
+                {
+                    sourceLoginLauncher.launch(
+                        Intent(context, VideoSourceLoginActivity::class.java)
+                    )
+                }
+            } else {
+                null
+            }
+        ) {
             pagingItems.retry()
         }
         return

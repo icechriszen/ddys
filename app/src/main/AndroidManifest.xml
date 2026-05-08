@@ -55,6 +55,11 @@
         <activity
             android:name=".setting.SettingsActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".setting.VideoSourceLoginActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
     </application>
 
 </manifest>

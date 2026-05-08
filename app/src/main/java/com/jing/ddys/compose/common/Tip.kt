@@ -42,10 +42,16 @@ fun Loading(text: String = "Loading"): Unit {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ErrorTip(message: String, retry: () -> Unit = { }) {
+fun ErrorTip(
+    message: String,
+    primaryActionText: String? = null,
+    primaryAction: (() -> Unit)? = null,
+    retry: () -> Unit = { }
+) {
     val focusRequester = remember {
         FocusRequester()
     }
+    val hasPrimaryAction = primaryActionText != null && primaryAction != null
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -53,29 +59,50 @@ fun ErrorTip(message: String, retry: () -> Unit = { }) {
     ) {
         Text(text = message)
         Spacer(modifier = Modifier.height(10.dp))
-        Button(
-            onClick = retry,
-            modifier = Modifier
-                .focusRequester(focusRequester),
-            border = ButtonDefaults.border(
-                focusedBorder = Border(
-                    BorderStroke(2.dp, MaterialTheme.colorScheme.border),
-                    shape = MaterialTheme.shapes.extraLarge
-                )
-            ),
-            shape = ButtonDefaults.shape(shape = MaterialTheme.shapes.extraLarge),
-            scale = ButtonScale.None,
-            colors = ButtonDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                focusedContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        if (hasPrimaryAction) {
+            ErrorButton(
+                text = primaryActionText!!,
+                onClick = primaryAction!!,
+                modifier = Modifier.focusRequester(focusRequester)
             )
-        ) {
-            Text(text = stringResource(R.string.button_retry))
+            Spacer(modifier = Modifier.height(10.dp))
         }
+        ErrorButton(
+            text = stringResource(R.string.button_retry),
+            onClick = retry,
+            modifier = if (hasPrimaryAction) Modifier else Modifier.focusRequester(focusRequester)
+        )
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(hasPrimaryAction) {
         focusRequester.requestFocus()
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ErrorButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        border = ButtonDefaults.border(
+            focusedBorder = Border(
+                BorderStroke(2.dp, MaterialTheme.colorScheme.border),
+                shape = MaterialTheme.shapes.extraLarge
+            )
+        ),
+        shape = ButtonDefaults.shape(shape = MaterialTheme.shapes.extraLarge),
+        scale = ButtonScale.None,
+        colors = ButtonDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+            focusedContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        )
+    ) {
+        Text(text = text)
     }
 }
