@@ -38,6 +38,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.jing.ddys.R
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import com.jing.ddys.compose.common.ConfirmDeleteDialog
 import com.jing.ddys.compose.common.ErrorTip
 import com.jing.ddys.compose.common.Loading
@@ -53,6 +55,11 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlayHistoryScreen(viewModel: PlayHistoryViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhonePlayHistoryScreen(viewModel = viewModel)
+        return
+    }
+
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
     val refreshState = pagingItems.loadState.refresh
     if (refreshState is LoadState.Loading) {

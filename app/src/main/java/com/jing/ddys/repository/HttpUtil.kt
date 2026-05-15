@@ -1,6 +1,5 @@
 package com.jing.ddys.repository
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
@@ -26,16 +25,11 @@ import org.jsoup.nodes.Document
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLSocketFactory
-import javax.net.ssl.X509TrustManager
 
 object HttpUtil {
 
@@ -69,18 +63,6 @@ object HttpUtil {
     @Volatile
     lateinit var okHttpClient: OkHttpClient
         private set
-
-    val trustManager = @SuppressLint("CustomX509TrustManager")
-    object : X509TrustManager {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-        }
-
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-        }
-
-        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-
-    }
 
     init {
         buildOkhttpClientWithProxySetting(
@@ -202,8 +184,9 @@ object HttpUtil {
         val infoRows =
             infoArea?.selectFirst(".abstract")?.textNodes()?.map { it.text() } ?: emptyList()
         val videoId = URL(detailPageUrl).path
-        val episodeList = parseLegacyPlaylistEpisodes(document, videoId)
-            .ifEmpty { parseWpsePlaylistEpisodes(document, videoId) }
+        val currentSeasonName = seasonList.firstOrNull { it.currentSeason }?.seasonName.orEmpty()
+        val episodeList = parseLegacyPlaylistEpisodes(document, videoId, currentSeasonName)
+            .ifEmpty { WpsePlaylistParser.parse(document, videoId) }
         return VideoDetailInfo(
             id = videoId,
             title = title,
@@ -219,7 +202,11 @@ object HttpUtil {
 
     }
 
-    private fun parseLegacyPlaylistEpisodes(document: Document, videoId: String): List<VideoEpisode> {
+    private fun parseLegacyPlaylistEpisodes(
+        document: Document,
+        videoId: String,
+        seasonName: String
+    ): List<VideoEpisode> {
         val tracks = document.selectFirst(".wp-playlist-script")?.html()
             ?.takeIf { it.isNotBlank() }
             ?.let {
@@ -238,54 +225,11 @@ object HttpUtil {
                 subTitleUrl = trackInfo["subsrc"]?.toString()?.let {
                     VideoSourceAuth.resolveSiteUrl("/subddr${it}")
                 } ?: "",
+                seasonName = seasonName,
                 src0 = src0,
                 src1 = src1,
             )
         }
-    }
-
-    private fun parseWpsePlaylistEpisodes(document: Document, videoId: String): List<VideoEpisode> {
-        val playlistJson = document.selectFirst("script.wpse-playlist-data")?.html()
-            ?.takeIf { it.isNotBlank() }
-            ?: return emptyList()
-        val seasons = (gson.fromJson(playlistJson, Map::class.java)["seasons"] as? List<*>)
-            ?: return emptyList()
-        return seasons.flatMap { season ->
-            val seasonInfo = season as? Map<*, *> ?: return@flatMap emptyList()
-            val seasonTitle = seasonInfo["title"]?.toString()?.trim().orEmpty()
-            val tracks = seasonInfo["tracks"] as? List<*> ?: emptyList<Any?>()
-            tracks.mapNotNull { track ->
-                val trackInfo = track as? Map<*, *> ?: return@mapNotNull null
-                val src = trackInfo["src"]?.toString()?.takeIf { it.isNotBlank() }
-                    ?: return@mapNotNull null
-                val episode = trackInfo["episode"]?.let(::formatPlaylistNumber).orEmpty()
-                val title = trackInfo["title"]?.toString()?.takeIf { it.isNotBlank() }
-                val name = title ?: buildString {
-                    if (seasonTitle.isNotEmpty()) {
-                        append(seasonTitle)
-                    }
-                    if (episode.isNotEmpty()) {
-                        if (isNotEmpty()) {
-                            append(" ")
-                        }
-                        append("第")
-                        append(episode)
-                        append("集")
-                    }
-                }.ifEmpty { src.substringAfterLast('/').substringBeforeLast('.') }
-                VideoEpisode(
-                    id = src.ifEmpty { "$videoId|$seasonTitle|$name" },
-                    name = name,
-                    subTitleUrl = "",
-                    src0 = src
-                )
-            }
-        }
-    }
-
-    private fun formatPlaylistNumber(value: Any): String {
-        val raw = value.toString()
-        return raw.removeSuffix(".0")
     }
 
     fun queryVideoUrl(id: String, detailPageUrl: String): VideoUrl {
@@ -440,10 +384,6 @@ object HttpUtil {
         }
     }
 
-    fun buildSSLSocketFactory(): SSLSocketFactory = SSLContext.getInstance("SSL").apply {
-        init(null, arrayOf(trustManager), SecureRandom())
-    }.socketFactory
-
     fun resetOkhttpClientWithProxySettings(proxySettings: NetworkProxySettings) {
         okHttpClient.dispatcher.executorService.shutdown()
         okHttpClient.connectionPool.evictAll()
@@ -454,8 +394,6 @@ object HttpUtil {
         val builder = OkHttpClient.Builder()
             .readTimeout(10, TimeUnit.SECONDS)
             .connectTimeout(10, TimeUnit.SECONDS)
-            .sslSocketFactory(buildSSLSocketFactory(), trustManager)
-            .hostnameVerifier { _, _ -> true }
             .apply {
                 if (BuildConfig.DEBUG) {
                     addNetworkInterceptor(HttpLoggingInterceptor().apply {

@@ -53,6 +53,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -68,6 +70,10 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchScreen(viewModel: SearchViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhoneSearchScreen(viewModel = viewModel)
+        return
+    }
 
     val context = LocalContext.current
     val handleSearchRequest = { keyword: String ->

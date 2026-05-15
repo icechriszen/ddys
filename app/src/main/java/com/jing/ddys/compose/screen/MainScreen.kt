@@ -18,8 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -49,6 +51,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import com.jing.ddys.R
 import com.jing.ddys.compose.common.CustomTabRow
 import com.jing.ddys.compose.common.ErrorTip
@@ -64,6 +68,8 @@ import com.jing.ddys.repository.VideoCardInfo
 import com.jing.ddys.search.SearchActivity
 import com.jing.ddys.setting.SettingsActivity
 import com.jing.ddys.setting.VideoSourceLoginActivity
+import com.jing.ddys.update.UpdateState
+import com.jing.ddys.update.UpdateViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -72,7 +78,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 
-private val categoryList = listOf(
+internal val categoryList = listOf(
     Pair("/", "首页"),
     Pair("/category/anime/new-bangumi/", "本季新番"),
     Pair("/category/airing/", "连载剧集"),
@@ -89,11 +95,16 @@ private val categoryList = listOf(
 )
 
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhoneMainScreen(viewModel = viewModel, updateViewModel = updateViewModel)
+        return
+    }
 
     var selectedTabIndex by remember {
         mutableIntStateOf(0)
     }
+    val updateState by updateViewModel.updateState.collectAsState()
     val tabNames = remember {
         categoryList.map { it.second }.toList()
     }
@@ -107,6 +118,9 @@ fun MainScreen(viewModel: MainViewModel) {
         delay(200L)
         viewModel.onCategoryChoose(url)
     }
+    LaunchedEffect(Unit) {
+        updateViewModel.checkDaily()
+    }
 
     var showAppNameRow by remember {
         mutableStateOf(true)
@@ -117,6 +131,7 @@ fun MainScreen(viewModel: MainViewModel) {
             tabs = tabNames,
             selectedTabIndex = selectedTabIndex,
             showAppNameRow = showAppNameRow,
+            showUpdateButton = updateState.hasVisibleUpdate(),
             onTabFocus = { selectedTabIndex = it })
         Spacer(modifier = Modifier.height(5.dp))
         VideoGrid(viewModel = viewModel,
@@ -138,6 +153,7 @@ fun TopNav(
     tabs: List<String>,
     selectedTabIndex: Int,
     showAppNameRow: Boolean = true,
+    showUpdateButton: Boolean = false,
     onTabFocus: (Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -172,6 +188,18 @@ fun TopNav(
                                     contentDescription = "history"
                                 )
                             }
+                            if (showUpdateButton) {
+                                IconButton(
+                                    onClick = {
+                                        SettingsActivity.navigateTo(context)
+                                    }, modifier = Modifier.restorableFocus()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SystemUpdate,
+                                        contentDescription = "update"
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = {
                                     SettingsActivity.navigateTo(context)
@@ -204,6 +232,19 @@ fun TopNav(
             )
         }
     }
+}
+
+internal fun UpdateState.hasVisibleUpdate(): Boolean = when (this) {
+    is UpdateState.Available,
+    is UpdateState.Downloading,
+    is UpdateState.Ready,
+    is UpdateState.InstallStarted -> true
+
+    UpdateState.Checking,
+    is UpdateState.Error,
+    UpdateState.Idle,
+    UpdateState.NoRelease,
+    UpdateState.UpToDate -> false
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)

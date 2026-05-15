@@ -40,7 +40,7 @@ class PlaybackViewModel(
         MutableStateFlow(Resource.Loading)
 
     private val _episodeName =
-        MutableStateFlow(videoDetail.episodes.getOrNull(initEpisodeIndex)?.name ?: "")
+        MutableStateFlow(videoDetail.episodes.getOrNull(initEpisodeIndex)?.displayName ?: "")
 
     val episodeName: StateFlow<String>
         get() = _episodeName
@@ -64,7 +64,7 @@ class PlaybackViewModel(
     init {
         viewModelScope.launch {
             _videoIndex.collectLatest {
-                _episodeName.emit(videoDetail.episodes.getOrNull(it)?.name ?: "")
+                _episodeName.emit(videoDetail.episodes.getOrNull(it)?.displayName ?: "")
                 queryVideoUrl(it)
             }
         }
@@ -137,6 +137,9 @@ class PlaybackViewModel(
                     videoUrlCache[videoIndex] = url
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) {
+                    throw e
+                }
                 Log.e(TAG, "查询视频链接失败:${e.message}", e)
                 _videoUrl.emit(Resource.Error("查询视频链接失败:${e.message}", e))
             }
@@ -170,7 +173,7 @@ class PlaybackViewModel(
                     EpisodeHistory(
                         id = ep.id,
                         videoId = videoDetail.id,
-                        name = ep.name,
+                        name = ep.displayName,
                         progress = currentPlayPosition,
                         duration = videoDuration,
                         timestamp = System.currentTimeMillis()
@@ -188,7 +191,7 @@ class PlaybackViewModel(
                 EpisodeHistory(
                     id = ep.id,
                     videoId = videoDetail.id,
-                    name = ep.name,
+                    name = ep.displayName,
                     progress = currentPlayPosition,
                     duration = videoDuration,
                     timestamp = System.currentTimeMillis()

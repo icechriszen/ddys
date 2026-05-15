@@ -65,6 +65,8 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.jing.ddys.R
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import com.jing.ddys.compose.common.ErrorTip
 import com.jing.ddys.compose.common.FocusGroup
 import com.jing.ddys.compose.common.Loading
@@ -85,6 +87,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun DetailScreen(viewModel: DetailViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhoneDetailScreen(viewModel = viewModel)
+        return
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val sourceLoginLauncher =
@@ -141,17 +148,27 @@ fun DetailScreen(viewModel: DetailViewModel) {
             }
         }
         if (videoDetail.episodes.isNotEmpty()) {
-            item {
-                VideoEpisodeRow(videoDetail.episodes) { _, episodeIndex ->
-                    viewModel.saveHistory(
-                        VideoHistory(
-                            id = videoDetail.id,
-                            title = videoDetail.title,
-                            pic = videoDetail.coverUrl,
+            videoDetail.episodes.toEpisodeGroups().forEach { episodeGroup ->
+                item {
+                    VideoEpisodeRow(
+                        title = episodeGroup.title,
+                        episodes = episodeGroup.episodes.map { it.value },
+                        showSeasonInEpisodeName = episodeGroup.showSeasonInEpisodeName
+                    ) { _, groupEpisodeIndex ->
+                        viewModel.saveHistory(
+                            VideoHistory(
+                                id = videoDetail.id,
+                                title = videoDetail.title,
+                                pic = videoDetail.coverUrl,
+                            )
                         )
-                    )
 
-                    VideoPlaybackActivity.navigateTo(context, videoDetail, episodeIndex)
+                        VideoPlaybackActivity.navigateTo(
+                            context,
+                            videoDetail,
+                            episodeGroup.episodes[groupEpisodeIndex].index
+                        )
+                    }
                 }
             }
         }
@@ -339,17 +356,19 @@ fun VideoSeasonRow(seasons: List<VideoSeason>, onSeasonClick: (VideoSeason) -> U
 @OptIn(ExperimentalTvFoundationApi::class)
 @Composable
 fun VideoEpisodeRow(
+    title: String = "选集",
     episodes: List<VideoEpisode>,
+    showSeasonInEpisodeName: Boolean = false,
     onEpisodeClick: (VideoEpisode, Int) -> Unit = { _, _ -> }
 ) {
-    ContentWithTitle(title = "选集") {
+    ContentWithTitle(title = title) {
         FocusGroup {
             TvLazyRow(
                 content = {
                     items(episodes.size, key = { episodes[it].id }) { episodeIndex ->
                         val episode = episodes[episodeIndex]
                         TextLabel(
-                            text = episode.name,
+                            text = if (showSeasonInEpisodeName) episode.displayName else episode.name,
                             modifier = if (episodeIndex == 0) Modifier.initiallyFocused() else Modifier.restorableFocus()
                         ) {
                             onEpisodeClick(episode, episodeIndex)

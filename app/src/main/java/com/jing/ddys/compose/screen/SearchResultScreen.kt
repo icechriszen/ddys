@@ -49,6 +49,8 @@ import androidx.tv.material3.ProvideTextStyle
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.jing.ddys.R
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import com.jing.ddys.compose.common.ErrorTip
 import com.jing.ddys.compose.common.Loading
 import com.jing.ddys.compose.common.appendEnd
@@ -62,6 +64,11 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchResultScreen(viewModel: SearchResultViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhoneSearchResultScreen(viewModel = viewModel)
+        return
+    }
+
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
     val refreshState = pagingItems.loadState.refresh
     val context = LocalContext.current

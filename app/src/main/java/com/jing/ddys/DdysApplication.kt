@@ -16,6 +16,11 @@ import com.jing.ddys.room.Dy555Database
 import com.jing.ddys.search.SearchResultViewModel
 import com.jing.ddys.search.SearchViewModel
 import com.jing.ddys.setting.SettingsViewModel
+import com.jing.ddys.update.ApkDownloader
+import com.jing.ddys.update.ApkInstallLauncher
+import com.jing.ddys.update.UpdateManager
+import com.jing.ddys.update.UpdateRepository
+import com.jing.ddys.update.UpdateViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -61,6 +66,7 @@ class DdysApplication : Application(), ImageLoaderFactory {
         }
         viewModelOf(::PlayHistoryViewModel)
         viewModelOf(::SettingsViewModel)
+        viewModelOf(::UpdateViewModel)
 
     }
 
@@ -89,6 +95,11 @@ class DdysApplication : Application(), ImageLoaderFactory {
         single {
             get<Dy555Database>().episodeHistoryDao()
         }
+
+        single { UpdateRepository() }
+        single { ApkDownloader(this@DdysApplication) }
+        single { ApkInstallLauncher() }
+        single { UpdateManager(this@DdysApplication, get(), get(), get()) }
 
     }
 

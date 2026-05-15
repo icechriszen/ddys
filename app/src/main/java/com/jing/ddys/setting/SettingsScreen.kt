@@ -1,5 +1,6 @@
 package com.jing.ddys.setting
 
+import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,14 +34,26 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.jing.ddys.BuildConfig
 import com.jing.ddys.R
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
+import com.jing.ddys.update.UpdateState
+import com.jing.ddys.update.UpdateViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel) {
+fun SettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateViewModel) {
+    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+        PhoneSettingsScreen(viewModel = viewModel, updateViewModel = updateViewModel)
+        return
+    }
+
     val proxySettings by viewModel.networkProxySettings.collectAsState()
     val sourceLoggedIn by viewModel.sourceLoggedIn.collectAsState()
+    val updateState by updateViewModel.updateState.collectAsState()
     val context = LocalContext.current
+    val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
     val defaultFocusRequester = remember {
         FocusRequester()
@@ -76,6 +89,26 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                             android.content.Intent(context, VideoSourceLoginActivity::class.java)
                         )
                     }
+                    SettingsItem(
+                        title = stringResource(R.string.software_update_title),
+                        supportText = softwareUpdateSupportText(updateState)
+                    ) {
+                        if (activity != null) {
+                            when (updateState) {
+                                is UpdateState.Available,
+                                is UpdateState.Ready -> updateViewModel.downloadAndInstall(activity)
+
+                                is UpdateState.InstallStarted,
+                                is UpdateState.Downloading,
+                                UpdateState.Checking -> Unit
+
+                                is UpdateState.Error,
+                                UpdateState.Idle,
+                                UpdateState.NoRelease,
+                                UpdateState.UpToDate -> updateViewModel.checkNow()
+                            }
+                        }
+                    }
                     val proxyText = if (proxySettings.proxyEnabled) {
                         "${proxySettings.proxyHost}:${proxySettings.proxyPort}"
                     } else {
@@ -102,6 +135,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshSourceAuthState()
+                if (activity != null) {
+                    updateViewModel.resumePendingInstall(activity)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -119,7 +155,58 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     }
 }
 
-private fun isValidPort(port: String): Boolean {
+@Composable
+internal fun softwareUpdateSupportText(updateState: UpdateState): String {
+    return when (updateState) {
+        UpdateState.Idle -> stringResource(
+            R.string.software_update_idle,
+            BuildConfig.VERSION_NAME
+        )
+
+        UpdateState.Checking -> stringResource(R.string.software_update_checking)
+        UpdateState.UpToDate -> stringResource(
+            R.string.software_update_up_to_date,
+            BuildConfig.VERSION_NAME
+        )
+
+        UpdateState.NoRelease -> stringResource(
+            R.string.software_update_no_release,
+            BuildConfig.VERSION_NAME
+        )
+
+        is UpdateState.Available -> stringResource(
+            R.string.software_update_available,
+            updateState.update.versionName
+        )
+
+        is UpdateState.Downloading -> {
+            val progress = updateState.progress
+            if (progress == null) {
+                stringResource(R.string.software_update_downloading_unknown)
+            } else {
+                stringResource(R.string.software_update_downloading, progress)
+            }
+        }
+
+        is UpdateState.Ready -> if (updateState.permissionRequired) {
+            stringResource(R.string.software_update_permission_required)
+        } else {
+            stringResource(R.string.software_update_ready, updateState.update.versionName)
+        }
+
+        is UpdateState.InstallStarted -> stringResource(
+            R.string.software_update_install_started,
+            updateState.update.versionName
+        )
+
+        is UpdateState.Error -> stringResource(
+            R.string.software_update_error,
+            updateState.message
+        )
+    }
+}
+
+internal fun isValidPort(port: String): Boolean {
 
     if (port.isEmpty()) {
         return false

@@ -22,6 +22,26 @@ data class VideoEpisode(
     val id: String,
     val name: String,
     val subTitleUrl: String,
+    val seasonName: String = "",
     val src0: String = "",
     val src1: String = ""
-) : java.io.Serializable
+) : java.io.Serializable {
+    val displayName: String
+        get() = if (seasonName.isBlank()) {
+            name
+        } else {
+            "${formatSeasonName(seasonName)} $name"
+        }
+
+    companion object {
+        fun formatSeasonName(seasonName: String): String {
+            val normalized = seasonName.trim()
+            return when {
+                normalized.isBlank() -> ""
+                normalized.startsWith("第") && normalized.endsWith("季") -> normalized
+                normalized.endsWith("季") -> normalized
+                else -> "第${normalized}季"
+            }
+        }
+    }
+}

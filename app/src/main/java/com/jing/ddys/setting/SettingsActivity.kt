@@ -5,18 +5,12 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.dimensionResource
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.MaterialTheme
-import com.jing.ddys.R
+import com.jing.ddys.compose.DdysAppFrame
 import com.jing.ddys.compose.theme.DdysTheme
+import com.jing.ddys.update.UpdateViewModel
 import org.koin.android.ext.android.get
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class SettingsActivity:ComponentActivity() {
 
@@ -24,24 +18,11 @@ class SettingsActivity:ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val viewModel = get<SettingsViewModel>()
+        val updateViewModel by viewModel<UpdateViewModel>()
         setContent {
             DdysTheme {
-                Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(
-                            dimensionResource(id = R.dimen.screen_h_padding), dimensionResource(
-                                id = R.dimen.screen_v_padding
-                            )
-                        )
-                        .fillMaxWidth()
-                ) {
-                    CompositionLocalProvider(
-                        androidx.tv.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface,
-                        androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface
-                    ) {
-                        SettingsScreen(viewModel = viewModel)
-                    }
+                DdysAppFrame {
+                    SettingsScreen(viewModel = viewModel, updateViewModel = updateViewModel)
                 }
             }
         }

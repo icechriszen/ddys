@@ -264,8 +264,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
-        .sslSocketFactory(HttpUtil.buildSSLSocketFactory(), HttpUtil.trustManager)
-        .hostnameVerifier { _, _ -> true }
         .apply {
             if (BuildConfig.DEBUG) {
                 addNetworkInterceptor(HttpLoggingInterceptor().apply {
@@ -289,24 +287,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
         .build()
 
     private val dataSourceFactory by lazy {
-        DefaultDataSource.Factory(
-            requireContext(),
-            OkHttpDataSource.Factory { req ->
-                val newReq = req.newBuilder()
-                    .header(HttpHeaders.USER_AGENT, HttpUtil.USER_AGENT)
-                    .header(HttpHeaders.REFERER, HttpUtil.BASE_URL + '/')
-                    .apply {
-                        if (req.url.host == VideoSourceAuth.sourceHost()) {
-                            val cookie = VideoSourceAuth.getAuthCookieHeader()
-                            if (cookie.isNotBlank()) {
-                                header("Cookie", cookie)
-                            }
-                        }
-                    }
-                    .build()
-                okHttpClient.newCall(newReq)
-            }
-        )
+        createPlaybackDataSourceFactory(requireContext())
     }
 
     private val mediaSourceFactory by lazy {
@@ -351,14 +332,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
     private fun buildPlayer() {
         exoplayer = ExoPlayer.Builder(requireContext())
             .setBandwidthMeter(trafficSpeedCalculator)
-            .setLoadControl(
-                DefaultLoadControl.Builder().setBufferDurationsMs(
-                    20_000,
-                    50_000,
-                    1000,
-                    1000
-                ).build()
-            )
+            .setLoadControl(createPlaybackLoadControl())
             .build().apply {
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
                     .setPreferredTextLanguage("zh")
@@ -483,7 +457,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
         val fragmentManager = requireActivity().supportFragmentManager
         ChooseEpisodeDialog(dataList = videoDetail.episodes,
             defaultSelectIndex = viewModel.videoIndex.value,
-            getText = { _, item -> item.name }) { index, _ ->
+            getText = { _, item -> item.displayName }) { index, _ ->
             exoplayer?.pause()
             viewModel.changePlayVideoIndex(index)
         }.apply {
