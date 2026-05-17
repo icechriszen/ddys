@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -70,12 +71,9 @@ import com.jing.ddys.setting.SettingsActivity
 import com.jing.ddys.setting.VideoSourceLoginActivity
 import com.jing.ddys.update.UpdateState
 import com.jing.ddys.update.UpdateViewModel
-import kotlinx.coroutines.Dispatchers
+import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 
 internal val categoryList = listOf(
@@ -119,6 +117,7 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
         viewModel.onCategoryChoose(url)
     }
     LaunchedEffect(Unit) {
+        delay(3000L)
         updateViewModel.checkDaily()
     }
 
@@ -186,6 +185,16 @@ fun TopNav(
                                 Icon(
                                     imageVector = Icons.Default.History,
                                     contentDescription = "history"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    WatchTogetherJoinActivity.navigateTo(context)
+                                }, modifier = Modifier.restorableFocus()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Groups,
+                                    contentDescription = "watch together"
                                 )
                             }
                             if (showUpdateButton) {
@@ -263,11 +272,11 @@ fun VideoGrid(
                 pagingItems.retry()
             }
         }
-    if (pagingItems.loadState.refresh is LoadState.Loading) {
+    if (pagingItems.loadState.refresh is LoadState.Loading && pagingItems.itemCount == 0) {
         Loading()
         return
     }
-    if (pagingItems.loadState.refresh is LoadState.Error) {
+    if (pagingItems.loadState.refresh is LoadState.Error && pagingItems.itemCount == 0) {
         val error = (pagingItems.loadState.refresh as LoadState.Error).error
         val authRequired = error is SourceAuthRequiredException
         ErrorTip(
@@ -286,11 +295,6 @@ fun VideoGrid(
             pagingItems.retry()
         }
         return
-    }
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.Default) {
-            viewModel.refreshChannel.receiveAsFlow().collectLatest { pagingItems.refresh() }
-        }
     }
     val cardWidth = dimensionResource(id = R.dimen.video_preview_card_width)
     val cardHeight = dimensionResource(id = R.dimen.video_preview_card_height)

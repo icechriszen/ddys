@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
@@ -60,6 +61,10 @@ import androidx.media3.ui.PlayerView
 import com.jing.ddys.ext.secondsToDuration
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
+import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
+import com.jing.ddys.watchtogether.WatchTogetherRole
+import com.jing.ddys.watchtogether.WatchTogetherSession
+import com.jing.ddys.watchtogether.WatchTogetherViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -69,6 +74,7 @@ import kotlinx.coroutines.launch
 fun PhonePlaybackScreen(
     videoDetail: VideoDetailInfo,
     viewModel: PlaybackViewModel,
+    watchTogetherViewModel: WatchTogetherViewModel,
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
@@ -95,8 +101,11 @@ fun PhonePlaybackScreen(
     val videoUrlState by viewModel.videoUrl.collectAsState()
     val episodeName by viewModel.episodeName.collectAsState()
     val videoIndex by viewModel.videoIndex.collectAsState()
+    val watchTogetherSession by watchTogetherViewModel.session.collectAsState()
+    val watchTogetherError by watchTogetherViewModel.errorMessage.collectAsState()
     var controlsVisible by remember { mutableStateOf(true) }
     var showEpisodeDialog by remember { mutableStateOf(false) }
+    var showWatchTogetherDialog by remember { mutableStateOf(false) }
     var loadingText by remember { mutableStateOf("Loading") }
     var errorText by remember { mutableStateOf<String?>(null) }
     var speedText by remember { mutableStateOf("") }
@@ -150,6 +159,46 @@ fun PhonePlaybackScreen(
             viewModel.videoDuration = player.duration
             speedText = "${trafficSpeedCalculator.getNetworkSpeed()} kb/s"
             delay(800L)
+        }
+    }
+
+    LaunchedEffect(watchTogetherSession, player, videoIndex) {
+        val session = watchTogetherSession ?: return@LaunchedEffect
+        while (isActive) {
+            when (session.role) {
+                WatchTogetherRole.Host -> {
+                    watchTogetherViewModel.publishHostState(
+                        videoDetail = videoDetail,
+                        episodeIndex = videoIndex,
+                        positionMs = player.currentPosition,
+                        durationMs = player.duration.coerceAtLeast(0L),
+                        playbackRate = player.playbackParameters.speed,
+                        paused = !player.isPlaying
+                    )
+                }
+
+                WatchTogetherRole.Member -> {
+                    val state = watchTogetherViewModel.refreshRoomState(session.roomCode)
+                    if (state != null) {
+                        if (state.episodeIndex != videoIndex) {
+                            player.pause()
+                            viewModel.changePlayVideoIndex(state.episodeIndex)
+                        } else {
+                            val targetPosition = state.estimatedPositionAt(System.currentTimeMillis())
+                            val thresholdMs = if (state.paused) 200L else 1000L
+                            if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
+                                player.seekTo(targetPosition)
+                            }
+                            if (state.paused && player.isPlaying) {
+                                player.pause()
+                            } else if (!state.paused && !player.isPlaying) {
+                                player.play()
+                            }
+                        }
+                    }
+                }
+            }
+            delay(1000L)
         }
     }
 
@@ -262,7 +311,8 @@ fun PhonePlaybackScreen(
                     player.pause()
                     viewModel.playNextEpisodeIfExists()
                 },
-                onChooseEpisode = { showEpisodeDialog = true }
+                onChooseEpisode = { showEpisodeDialog = true },
+                onWatchTogether = { showWatchTogetherDialog = true }
             )
         }
 
@@ -318,6 +368,42 @@ fun PhonePlaybackScreen(
             }
         )
     }
+
+    if (showWatchTogetherDialog) {
+        WatchTogetherDialog(
+            session = watchTogetherSession,
+            errorText = watchTogetherError,
+            onDismiss = { showWatchTogetherDialog = false },
+            onCreateRoom = {
+                coroutineScope.launch {
+                    runCatching {
+                        watchTogetherViewModel.createRoom(
+                            videoDetail = videoDetail,
+                            episodeIndex = videoIndex,
+                            positionMs = player.currentPosition,
+                            durationMs = player.duration.coerceAtLeast(0L),
+                            playbackRate = player.playbackParameters.speed,
+                            paused = !player.isPlaying
+                        )
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            it.message ?: "创建一起看房间失败",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            },
+            onJoinRoom = {
+                WatchTogetherJoinActivity.navigateTo(context)
+                showWatchTogetherDialog = false
+            },
+            onLeaveRoom = {
+                watchTogetherViewModel.leaveRoom()
+                showWatchTogetherDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -328,7 +414,8 @@ private fun PhonePlaybackTopControls(
     onExit: () -> Unit,
     onReplay: () -> Unit,
     onNext: () -> Unit,
-    onChooseEpisode: () -> Unit
+    onChooseEpisode: () -> Unit,
+    onWatchTogether: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -356,6 +443,9 @@ private fun PhonePlaybackTopControls(
         IconButton(onClick = onChooseEpisode) {
             Icon(Icons.Default.PlaylistPlay, contentDescription = "episodes", tint = Color.White)
         }
+        IconButton(onClick = onWatchTogether) {
+            Icon(Icons.Default.Groups, contentDescription = "watch together", tint = Color.White)
+        }
         IconButton(onClick = onReplay) {
             Icon(Icons.Default.Replay, contentDescription = "replay", tint = Color.White)
         }
@@ -370,4 +460,56 @@ private fun PhonePlaybackTopControls(
             Icon(Icons.Default.Close, contentDescription = "close", tint = Color.White)
         }
     }
+}
+
+@Composable
+private fun WatchTogetherDialog(
+    session: WatchTogetherSession?,
+    errorText: String?,
+    onDismiss: () -> Unit,
+    onCreateRoom: () -> Unit,
+    onJoinRoom: () -> Unit,
+    onLeaveRoom: () -> Unit
+) {
+    if (session != null) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("一起看房间") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("房间码: ${session.roomCode}")
+                    Text("成员: ${session.memberCount}")
+                    errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("关闭")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onLeaveRoom) {
+                    Text("退出房间")
+                }
+            }
+        )
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("一起看") },
+        text = {
+            errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        },
+        confirmButton = {
+            TextButton(onClick = onCreateRoom) {
+                Text("创建房间")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onJoinRoom) {
+                Text("加入房间")
+            }
+        }
+    )
 }

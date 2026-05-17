@@ -2,41 +2,30 @@ package com.jing.ddys.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import com.jing.ddys.repository.BasicPagingSource
-import com.jing.ddys.repository.HttpUtil
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import com.jing.ddys.repository.HomeRepository
+import com.jing.ddys.repository.VideoCardInfo
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 
-class MainViewModel : ViewModel() {
+class MainViewModel(
+    private val homeRepository: HomeRepository
+) : ViewModel() {
 
-    @Volatile
-    private var _category = "/"
+    private val selectedCategory = MutableStateFlow("/")
 
-    val refreshChannel = Channel<String>(onBufferOverflow = BufferOverflow.DROP_OLDEST)
-
-    val pager = Pager(
-        config = PagingConfig(
-            pageSize = 24, prefetchDistance = 50
-        )
-    ) {
-        BasicPagingSource {
-            HttpUtil.queryVideoOfCategory(_category, it)
-        }
-    }.flow
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val pager: Flow<PagingData<VideoCardInfo>> = selectedCategory
+        .flatMapLatest { category -> homeRepository.pagerForCategory(category) }
+        .cachedIn(viewModelScope)
 
     fun onCategoryChoose(category: String) {
-        if (_category == category) {
+        if (selectedCategory.value == category) {
             return
         }
-        _category = category
-        viewModelScope.launch(Dispatchers.Default) {
-            refreshChannel.send(category)
-        }
+        selectedCategory.value = category
     }
-
-
 }

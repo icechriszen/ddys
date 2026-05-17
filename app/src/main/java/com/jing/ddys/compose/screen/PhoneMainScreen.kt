@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -53,11 +54,8 @@ import com.jing.ddys.search.SearchActivity
 import com.jing.ddys.setting.SettingsActivity
 import com.jing.ddys.setting.VideoSourceLoginActivity
 import com.jing.ddys.update.UpdateViewModel
-import kotlinx.coroutines.Dispatchers
+import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +69,7 @@ fun PhoneMainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) 
         viewModel.onCategoryChoose(categoryList[selectedTabIndex].first)
     }
     LaunchedEffect(Unit) {
+        delay(3000L)
         updateViewModel.checkDaily()
     }
 
@@ -83,6 +82,9 @@ fun PhoneMainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) 
                 }
                 IconButton(onClick = { PlayHistoryActivity.navigateTo(context) }) {
                     Icon(Icons.Default.History, contentDescription = "history")
+                }
+                IconButton(onClick = { WatchTogetherJoinActivity.navigateTo(context) }) {
+                    Icon(Icons.Default.Groups, contentDescription = "watch together")
                 }
                 if (updateState.hasVisibleUpdate()) {
                     IconButton(onClick = { SettingsActivity.navigateTo(context) }) {
@@ -118,11 +120,11 @@ private fun PhoneVideoGrid(viewModel: MainViewModel) {
             }
         }
 
-    if (pagingItems.loadState.refresh is LoadState.Loading) {
+    if (pagingItems.loadState.refresh is LoadState.Loading && pagingItems.itemCount == 0) {
         Loading()
         return
     }
-    if (pagingItems.loadState.refresh is LoadState.Error) {
+    if (pagingItems.loadState.refresh is LoadState.Error && pagingItems.itemCount == 0) {
         val error = (pagingItems.loadState.refresh as LoadState.Error).error
         val authRequired = error is SourceAuthRequiredException
         ErrorTip(
@@ -141,12 +143,6 @@ private fun PhoneVideoGrid(viewModel: MainViewModel) {
             pagingItems.retry()
         }
         return
-    }
-
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.Default) {
-            viewModel.refreshChannel.receiveAsFlow().collectLatest { pagingItems.refresh() }
-        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
