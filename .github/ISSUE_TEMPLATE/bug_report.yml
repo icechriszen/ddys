@@ -1,0 +1,85 @@
+name: Bug report
+description: Report a reproducible problem in the Android client.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include account cookies, private sources, signing keys, or copyrighted resource links.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Release version, APK name, or commit SHA.
+      placeholder: "v1.2.9 / ddys-v1.2.9.apk / commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: "Chromecast with Google TV / Mi Box / Android TV emulator"
+    validations:
+      required: true
+  - type: input
+    id: android-version
+    attributes:
+      label: Android version
+      placeholder: "Android 12"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Home / browsing
+        - Search
+        - Detail page
+        - Playback
+        - Subtitle
+        - Login / video source auth
+        - Proxy / network
+        - App update
+        - Build / development
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest repeatable path to the problem.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or recordings
+      description: Attach safe logs or screenshots. Remove tokens, cookies, and private URLs first.
+    validations:
+      required: false
+  - type: textarea
+    id: network
+    attributes:
+      label: Network notes
+      description: Proxy, region, DNS, or reproducibility on a different network.
+    validations:
+      required: false
