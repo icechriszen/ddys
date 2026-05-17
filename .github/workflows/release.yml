@@ -1,26 +1,39 @@
-name: pre-release
+name: release
+
 on:
   push:
     tags:
-      - '**'
+      - 'v*'
+
 permissions:
   contents: write
+
 jobs:
   build-and-release:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Java JDK
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - name: Build
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests
         run: |
-          chmod a+x ./gradlew
+          chmod +x ./gradlew
+          ./gradlew testDebugUnitTest
+
+      - name: Build release APK
+        run: |
           ./gradlew :app:assembleRelease
-      - name: sign-apk
+
+      - name: Sign APK
         uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: app/build/outputs/apk/release
@@ -30,10 +43,18 @@ jobs:
           keyPassword: ${{ secrets.KEY_PWD }}
         env:
           BUILD_TOOLS_VERSION: "33.0.0"
-      - name: rename-apk
-        run: mv app/build/outputs/apk/release/app-release-unsigned-signed.apk ddys-${{ github.ref_name }}.apk
+
+      - name: Prepare release assets
+        run: |
+          mv app/build/outputs/apk/release/app-release-unsigned-signed.apk ddys-${{ github.ref_name }}.apk
+          sha256sum ddys-${{ github.ref_name }}.apk > ddys-${{ github.ref_name }}.apk.sha256
+
       - name: Release
         run: |
-          gh release create ${{ github.ref_name }} ddys-${{ github.ref_name }}.apk
+          gh release create "${{ github.ref_name }}" \
+            ddys-${{ github.ref_name }}.apk \
+            ddys-${{ github.ref_name }}.apk.sha256 \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

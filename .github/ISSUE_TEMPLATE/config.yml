@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Development guide
+    url: https://github.com/icechriszen/ddys/blob/main/docs/DEVELOPMENT.md
+    about: Build, test, and local development notes.
+  - name: Security policy
+    url: https://github.com/icechriszen/ddys/blob/main/SECURITY.md
+    about: How to report security-sensitive issues.

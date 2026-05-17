@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a focused improvement for the Android client.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please keep requests focused on the Android client. Do not request features that depend on redistributing copyrighted content or bypassing third-party site restrictions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior and where it should appear in the app.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - TV navigation / focus
+        - Mobile layout
+        - Search
+        - Playback
+        - Subtitle
+        - Login / video source auth
+        - Proxy / network
+        - App update
+        - Developer tooling
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: How can this be tested on a TV device, emulator, or unit test?
+    validations:
+      required: false
