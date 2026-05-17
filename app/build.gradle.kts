@@ -7,13 +7,18 @@ plugins {
 android {
     namespace = "com.jing.ddys"
     compileSdk = 34
+    val watchTogetherBaseUrl =
+        providers.gradleProperty("WATCH_TOGETHER_BASE_URL")
+            .orElse(providers.environmentVariable("WATCH_TOGETHER_BASE_URL"))
+            .orElse("")
+            .get()
 
     defaultConfig {
         applicationId = "com.jing.ddys"
         minSdk = 21
         targetSdk = 33
-        versionCode = 12
-        versionName = "1.2.8"
+        versionCode = 13
+        versionName = "1.3.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -22,6 +27,11 @@ android {
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
         }
+        buildConfigField(
+            "String",
+            "WATCH_TOGETHER_BASE_URL",
+            "\"${watchTogetherBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        )
 
     }
     compileOptions {
@@ -114,5 +124,7 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("org.robolectric:robolectric:4.11.1")
 
 }

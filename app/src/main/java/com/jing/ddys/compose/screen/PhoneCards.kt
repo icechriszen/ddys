@@ -1,6 +1,7 @@
 package com.jing.ddys.compose.screen
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ fun PhoneVideoPosterCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.7f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .clip(RoundedCornerShape(8.dp))
             )
         }

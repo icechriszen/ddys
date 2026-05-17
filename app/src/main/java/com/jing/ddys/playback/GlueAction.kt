@@ -16,3 +16,9 @@ class PlayListAction(context: Context) : Action(30) {
         icon = ContextCompat.getDrawable(context, R.drawable.play_list)
     }
 }
+
+class WatchTogetherAction(context: Context) : Action(40) {
+    init {
+        icon = ContextCompat.getDrawable(context, R.drawable.watch_together)
+    }
+}

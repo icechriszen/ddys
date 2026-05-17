@@ -53,6 +53,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".watchtogether.WatchTogetherJoinActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".setting.SettingsActivity"
             android:exported="false" />
 
