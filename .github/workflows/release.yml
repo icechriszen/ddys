@@ -33,20 +33,33 @@ jobs:
         run: |
           ./gradlew :app:assembleRelease
 
-      - name: Sign APK
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PWD }}
-          keyPassword: ${{ secrets.KEY_PWD }}
-        env:
-          BUILD_TOOLS_VERSION: "33.0.0"
-
       - name: Prepare release assets
         run: |
-          mv app/build/outputs/apk/release/app-release-unsigned-signed.apk ddys-${{ github.ref_name }}.apk
+          set -euo pipefail
+
+          build_tools_dir="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          if [ -z "$build_tools_dir" ]; then
+            echo "No Android build-tools directory found under $ANDROID_HOME/build-tools" >&2
+            exit 1
+          fi
+
+          unsigned_apk="app/build/outputs/apk/release/app-release-unsigned.apk"
+          aligned_apk="app/build/outputs/apk/release/app-release-aligned.apk"
+          signed_apk="ddys-${{ github.ref_name }}.apk"
+          keystore="$RUNNER_TEMP/ddys-release.keystore"
+
+          printf '%s' "${{ secrets.SIGNING_KEY }}" | base64 --decode > "$keystore"
+
+          "$build_tools_dir/zipalign" -p -f 4 "$unsigned_apk" "$aligned_apk"
+          "$build_tools_dir/apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass "pass:${{ secrets.KEY_STORE_PWD }}" \
+            --key-pass "pass:${{ secrets.KEY_PWD }}" \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          "$build_tools_dir/apksigner" verify --verbose "$signed_apk"
+
           sha256sum ddys-${{ github.ref_name }}.apk > ddys-${{ github.ref_name }}.apk.sha256
 
       - name: Release
