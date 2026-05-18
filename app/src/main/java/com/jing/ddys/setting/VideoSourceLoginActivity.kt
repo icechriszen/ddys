@@ -41,6 +41,8 @@ class VideoSourceLoginActivity : Activity() {
         }
 
         webView.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadWithOverviewMode = true
@@ -53,7 +55,7 @@ class VideoSourceLoginActivity : Activity() {
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     if (VideoSourceAuth.isLoginUrl(url)) {
-                        fillPassword(view)
+                        enhanceLoginForm(view)
                     } else if (VideoSourceAuth.saveAuthCookieFromWebView()) {
                         CookieManager.getInstance().flush()
                         showShortToast("网站登录成功")
@@ -66,7 +68,7 @@ class VideoSourceLoginActivity : Activity() {
 
         setContentView(createContentView())
         webView.loadUrl(VideoSourceAuth.loginUrl())
-        webView.requestFocus()
+        webView.requestFocusFromTouch()
     }
 
     override fun onDestroy() {
@@ -81,7 +83,7 @@ class VideoSourceLoginActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
             addView(TextView(this@VideoSourceLoginActivity).apply {
-                text = "密码已自动填写；如出现验证，请用遥控器完成后点击登录。"
+                text = "密码已自动填写；如出现验证，请用触屏或遥控器完成后点击登录。"
                 setTextColor(Color.WHITE)
                 textSize = 18f
                 gravity = Gravity.CENTER_VERTICAL
@@ -98,18 +100,10 @@ class VideoSourceLoginActivity : Activity() {
         }
     }
 
-    private fun fillPassword(view: WebView) {
-        val script = """
-            (function() {
-                var input = document.querySelector('input[name="password_protected_pwd"]');
-                if (input) {
-                    input.focus();
-                    input.value = '${VideoSourceAuth.password}';
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            })();
-        """.trimIndent()
-        view.evaluateJavascript(script, null)
+    private fun enhanceLoginForm(view: WebView) {
+        view.evaluateJavascript(
+            VideoSourceLoginScripts.buildEnhanceLoginFormScript(VideoSourceAuth.password),
+            null
+        )
     }
 }

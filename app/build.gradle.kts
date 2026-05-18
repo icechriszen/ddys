@@ -17,8 +17,8 @@ android {
         applicationId = "com.jing.ddys"
         minSdk = 21
         targetSdk = 33
-        versionCode = 16
-        versionName = "1.3.3"
+        versionCode = 17
+        versionName = "1.3.4"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -46,6 +46,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             proguardFiles("proguard-rules.pro")

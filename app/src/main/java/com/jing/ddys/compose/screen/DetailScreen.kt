@@ -283,7 +283,7 @@ fun VideoInfoRow(
                 )
             },
             text = {
-                Text(text = videoDetail.description.substringAfter(':').trimStart(),
+                Text(text = videoDetail.description,
                     modifier = Modifier
                         .verticalScroll(scrollState)
                         .focusRequester(longDescFocusRequester)

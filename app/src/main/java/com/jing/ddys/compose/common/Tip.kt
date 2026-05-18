@@ -16,6 +16,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.jing.ddys.compose.AppFormFactor
+import com.jing.ddys.compose.rememberAppFormFactor
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -24,6 +26,18 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.jing.ddys.R
+import androidx.compose.material3.Button as PhoneButton
+import androidx.compose.material3.Text as PhoneText
+
+enum class ErrorTipControls {
+    PhoneTouch,
+    TvFocus
+}
+
+fun errorTipControlsFor(formFactor: AppFormFactor): ErrorTipControls = when (formFactor) {
+    AppFormFactor.Phone -> ErrorTipControls.PhoneTouch
+    AppFormFactor.Tv -> ErrorTipControls.TvFocus
+}
 
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -48,6 +62,17 @@ fun ErrorTip(
     primaryAction: (() -> Unit)? = null,
     retry: () -> Unit = { }
 ) {
+    val controls = errorTipControlsFor(rememberAppFormFactor())
+    if (controls == ErrorTipControls.PhoneTouch) {
+        PhoneErrorTip(
+            message = message,
+            primaryActionText = primaryActionText,
+            primaryAction = primaryAction,
+            retry = retry
+        )
+        return
+    }
+
     val focusRequester = remember {
         FocusRequester()
     }
@@ -75,6 +100,33 @@ fun ErrorTip(
     }
     LaunchedEffect(hasPrimaryAction) {
         focusRequester.requestFocus()
+    }
+}
+
+@Composable
+private fun PhoneErrorTip(
+    message: String,
+    primaryActionText: String? = null,
+    primaryAction: (() -> Unit)? = null,
+    retry: () -> Unit = { }
+) {
+    val hasPrimaryAction = primaryActionText != null && primaryAction != null
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        PhoneText(text = message)
+        Spacer(modifier = Modifier.height(12.dp))
+        if (hasPrimaryAction) {
+            PhoneButton(onClick = primaryAction!!) {
+                PhoneText(text = primaryActionText!!)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        PhoneButton(onClick = retry) {
+            PhoneText(text = stringResource(R.string.button_retry))
+        }
     }
 }
 

@@ -1,28 +1,26 @@
 package com.jing.ddys.repository
 
-import com.google.gson.Gson
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import org.jsoup.nodes.Document
 
 object WpsePlaylistParser {
-    private val gson = Gson()
-
     fun parse(document: Document, videoId: String): List<VideoEpisode> {
-        val playlistJson = document.selectFirst("script.wpse-playlist-data")?.html()
+        val seasons = document.selectFirst("script.wpse-playlist-data")?.html()
             ?.takeIf { it.isNotBlank() }
+            ?.let { JsonParser.parseString(it).asJsonObject.getAsJsonArray("seasons") }
             ?: return emptyList()
-        val seasons = (gson.fromJson(playlistJson, Map::class.java)["seasons"] as? List<*>)
-            ?: return emptyList()
-        val showSeasonName = seasons.size > 1
+        val showSeasonName = seasons.size() > 1
         return seasons.flatMap { season ->
-            val seasonInfo = season as? Map<*, *> ?: return@flatMap emptyList()
-            val seasonTitle = seasonInfo["title"]?.toString()?.trim().orEmpty()
-            val tracks = seasonInfo["tracks"] as? List<*> ?: emptyList<Any?>()
+            val seasonInfo = season.asJsonObject
+            val seasonTitle = seasonInfo.get("title")?.asString?.trim().orEmpty()
+            val tracks = seasonInfo.getAsJsonArray("tracks") ?: return@flatMap emptyList()
             tracks.mapNotNull { track ->
-                val trackInfo = track as? Map<*, *> ?: return@mapNotNull null
-                val src = trackInfo["src"]?.toString()?.takeIf { it.isNotBlank() }
+                val trackInfo = track.asJsonObject
+                val src = trackInfo.get("src")?.asString?.takeIf { it.isNotBlank() }
                     ?: return@mapNotNull null
-                val episode = trackInfo["episode"]?.let(::formatPlaylistNumber).orEmpty()
-                val title = trackInfo["title"]?.toString()?.takeIf { it.isNotBlank() }
+                val episode = trackInfo.get("episode")?.let(::formatPlaylistNumber).orEmpty()
+                val title = trackInfo.get("title")?.asString?.takeIf { it.isNotBlank() }
                 val name = title ?: episode.takeIf { it.isNotEmpty() }?.let { "第${it}集" }
                     ?: src.substringAfterLast('/').substringBeforeLast('.')
                 VideoEpisode(
@@ -36,8 +34,8 @@ object WpsePlaylistParser {
         }
     }
 
-    private fun formatPlaylistNumber(value: Any): String {
-        val raw = value.toString()
+    private fun formatPlaylistNumber(value: JsonElement): String {
+        val raw = value.asString
         return raw.removeSuffix(".0")
     }
 }

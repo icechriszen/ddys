@@ -77,8 +77,10 @@ class WatchTogetherJoinActivity : ComponentActivity() {
                         lifecycleScope.launch {
                             runCatching {
                                 val state = client.getRoom(code)
+                                val detailPageUrl =
+                                    WatchTogetherRoomStateValidator.requirePlayableDetailPageUrl(state)
                                 val detail = withContext(Dispatchers.IO) {
-                                    HttpUtil.queryDetailPage(state.detailPageUrl)
+                                    HttpUtil.queryDetailPage(detailPageUrl)
                                 }
                                 val episodeIndex = state.episodeIndex
                                     .coerceIn(0, (detail.episodes.size - 1).coerceAtLeast(0))

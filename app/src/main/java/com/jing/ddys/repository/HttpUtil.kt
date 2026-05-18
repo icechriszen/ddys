@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.jing.ddys.BuildConfig
 import com.jing.ddys.DdysApplication
 import com.jing.ddys.ext.inflate
@@ -183,9 +184,10 @@ object HttpUtil {
         val ratingNumber = infoArea?.selectFirst(".rating_nums")?.text()
         val infoRows =
             infoArea?.selectFirst(".abstract")?.textNodes()?.map { it.text() } ?: emptyList()
+        val description = VideoDescriptionText.normalize(infoRows.lastOrNull().orEmpty())
         val videoId = URL(detailPageUrl).path
         val currentSeasonName = seasonList.firstOrNull { it.currentSeason }?.seasonName.orEmpty()
-        val episodeList = parseLegacyPlaylistEpisodes(document, videoId, currentSeasonName)
+        val episodeList = LegacyPlaylistParser.parse(document, videoId, currentSeasonName)
             .ifEmpty { WpsePlaylistParser.parse(document, videoId) }
         return VideoDetailInfo(
             id = videoId,
@@ -195,41 +197,11 @@ object HttpUtil {
             episodes = episodeList.distinctBy { it.id },
             relatedVideo = relatedVideos,
             rating = ratingNumber ?: "",
-            description = infoRows.lastOrNull() ?: "",
+            description = description,
             infoRows = if (infoRows.isNotEmpty()) infoRows.slice(0 until infoRows.size - 1) else emptyList(),
             detailPageUrl = detailPageUrl
         )
 
-    }
-
-    private fun parseLegacyPlaylistEpisodes(
-        document: Document,
-        videoId: String,
-        seasonName: String
-    ): List<VideoEpisode> {
-        val tracks = document.selectFirst(".wp-playlist-script")?.html()
-            ?.takeIf { it.isNotBlank() }
-            ?.let {
-                (gson.fromJson(it, Map::class.java)["tracks"] as? List<*>)
-            }
-            ?: emptyList<Any?>()
-        return tracks.mapNotNull { track ->
-            val trackInfo = track as? Map<*, *> ?: return@mapNotNull null
-            val src0 = trackInfo["src0"]?.toString() ?: ""
-            val src1 = trackInfo["src1"]?.toString() ?: ""
-            val name = trackInfo["caption"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return@mapNotNull null
-            VideoEpisode(
-                id = src1.ifEmpty { "$videoId|$name" },
-                name = name,
-                subTitleUrl = trackInfo["subsrc"]?.toString()?.let {
-                    VideoSourceAuth.resolveSiteUrl("/subddr${it}")
-                } ?: "",
-                seasonName = seasonName,
-                src0 = src0,
-                src1 = src1,
-            )
-        }
     }
 
     fun queryVideoUrl(id: String, detailPageUrl: String): VideoUrl {
@@ -334,18 +306,18 @@ object HttpUtil {
             readHtmlResponse(it)
         }
         Log.d(TAG, "queryVideoUrl: $resp")
-        val map = gson.fromJson(resp, Map::class.java)
-        val err = map["err"]
-        if (err != null) {
-            throw RuntimeException("获取链接地址错误,请稍后再试:$err")
+        val responseJson = JsonParser.parseString(resp).asJsonObject
+        val err = responseJson.get("err")
+        if (err != null && !err.isJsonNull) {
+            throw RuntimeException("获取链接地址错误,请稍后再试:${err.asString}")
         }
-        val url = map["url"] as String?
+        val url = responseJson.get("url")?.takeIf { !it.isJsonNull }?.asString
         if (url != null) {
             return VideoUrl(
                 type = VideoUrlType.URL, url = Uri.parse(url)
             )
         }
-        val pin = map["pin"] as String?
+        val pin = responseJson.get("pin")?.takeIf { !it.isJsonNull }?.asString
         if (pin != null) {
             return VideoUrl(
                 type = VideoUrlType.M3U8_TEXT,

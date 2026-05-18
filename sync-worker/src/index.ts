@@ -99,6 +99,26 @@ function withCors(response: Response): Response {
   });
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isValidPlaybackStatePayload(payload: Partial<WatchTogetherRoomState>): boolean {
+  return (
+    isNonEmptyString(payload.detailPageUrl) &&
+    isNonEmptyString(payload.title) &&
+    isValidNumber(payload.episodeIndex) &&
+    isValidNumber(payload.positionMs) &&
+    isValidNumber(payload.durationMs) &&
+    isValidNumber(payload.playbackRate) &&
+    typeof payload.paused === "boolean"
+  );
+}
+
 export class WatchTogetherRoom {
   constructor(
     private readonly state: DurableObjectState,
@@ -177,6 +197,9 @@ export class WatchTogetherRoom {
     }
 
     const payload = await request.json() as Omit<WatchTogetherRoomState, "memberCount">;
+    if (!isValidPlaybackStatePayload(payload)) {
+      return json({ error: "invalid_room_state" }, 400);
+    }
     const roomCode = payload.roomCode;
     const now = Date.now();
     const record: RoomRecord = {
@@ -209,6 +232,9 @@ export class WatchTogetherRoom {
     const payload = await request.json() as { hostToken?: string; state?: WatchTogetherRoomState };
     if (payload.hostToken !== record.hostToken || !payload.state) {
       return json({ error: "host_required" }, 403);
+    }
+    if (!isValidPlaybackStatePayload(payload.state)) {
+      return json({ error: "invalid_room_state" }, 400);
     }
     const updated = this.normalizeRecord(record, payload.state);
     await this.putRecord(updated);

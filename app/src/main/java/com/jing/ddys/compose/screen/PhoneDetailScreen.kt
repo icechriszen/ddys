@@ -165,7 +165,7 @@ private fun PhoneDetailContent(viewModel: DetailViewModel, videoDetail: VideoDet
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(text = stringResource(R.string.video_description), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = videoDetail.description.substringAfter(':').trimStart(),
+                            text = videoDetail.description,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis
@@ -253,7 +253,7 @@ private fun PhoneDetailContent(viewModel: DetailViewModel, videoDetail: VideoDet
                         .height(360.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(text = videoDetail.description.substringAfter(':').trimStart())
+                    Text(text = videoDetail.description)
                 }
             }
         )

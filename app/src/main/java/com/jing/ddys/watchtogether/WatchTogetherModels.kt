@@ -74,3 +74,12 @@ data class WatchTogetherSession(
     val hostToken: String? = null,
     val memberCount: Int = 1
 )
+
+object WatchTogetherRoomStateValidator {
+    fun requirePlayableDetailPageUrl(state: WatchTogetherRoomState): String {
+        if (state.detailPageUrl.isNullOrBlank()) {
+            throw IllegalStateException("房间影片信息异常，请让 Host 重新创建房间")
+        }
+        return state.detailPageUrl
+    }
+}

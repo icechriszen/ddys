@@ -52,4 +52,26 @@ class WatchTogetherModelsTest {
 
         assertEquals(10_000L, state.estimatedPositionAt(nowMs = 3_000L))
     }
+
+    @Test
+    fun playableRoomStateRequiresDetailPageUrl() {
+        val state = WatchTogetherRoomState(
+            roomCode = "123456",
+            detailPageUrl = " ",
+            title = "Title",
+            episodeIndex = 0,
+            positionMs = 0L,
+            durationMs = 0L,
+            playbackRate = 1f,
+            paused = true,
+            updatedAtMs = 1_000L,
+            memberCount = 1
+        )
+
+        val error = runCatching {
+            WatchTogetherRoomStateValidator.requirePlayableDetailPageUrl(state)
+        }.exceptionOrNull()
+
+        assertEquals("房间影片信息异常，请让 Host 重新创建房间", error?.message)
+    }
 }
