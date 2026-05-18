@@ -1,66 +1,75 @@
 package com.jing.ddys.update
 
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 object GithubReleaseParser {
 
-    private val gson = Gson()
-
     fun parse(json: String): UpdateRelease? {
-        val dto = runCatching { gson.fromJson(json, GithubReleaseDto::class.java) }.getOrNull()
+        val element = runCatching { JsonParser.parseString(json) }.getOrNull()
             ?: return null
-        return dto.toUpdateReleaseOrNull()
+        return element.asObjectOrNull()?.toUpdateReleaseOrNull()
     }
 
     fun parseFirstWithApk(json: String): UpdateRelease? {
-        val releases = runCatching {
-            gson.fromJson(json, Array<GithubReleaseDto>::class.java).toList()
-        }.getOrNull() ?: return parse(json)
+        val element = runCatching { JsonParser.parseString(json) }.getOrNull()
+            ?: return null
+        val releases = element.asArrayOrNull()
+            ?: return element.asObjectOrNull()?.toUpdateReleaseOrNull()
 
         return releases.asSequence()
-            .filter { !it.draft && !it.prerelease }
+            .mapNotNull { it.asObjectOrNull() }
+            .filter { !it.boolean("draft") && !it.boolean("prerelease") }
             .mapNotNull { it.toUpdateReleaseOrNull() }
             .firstOrNull()
     }
 
-    private fun GithubReleaseDto.toUpdateReleaseOrNull(): UpdateRelease? {
-        val asset = assets.firstOrNull {
-            it.name.endsWith(".apk", ignoreCase = true) && it.browserDownloadUrl.isNotBlank()
-        } ?: return null
+    private fun JsonObject.toUpdateReleaseOrNull(): UpdateRelease? {
+        val asset = array("assets")
+            ?.asSequence()
+            ?.mapNotNull { it.asObjectOrNull() }
+            ?.firstOrNull {
+                it.string("name").endsWith(".apk", ignoreCase = true) &&
+                    it.string("browser_download_url").isNotBlank()
+            }
+            ?: return null
+        val tagName = string("tag_name").takeIf { it.isNotBlank() } ?: return null
         return UpdateRelease(
-            tagName = tagName.takeIf { it.isNotBlank() } ?: return null,
-            releaseName = name,
-            body = body,
-            htmlUrl = htmlUrl,
+            tagName = tagName,
+            releaseName = string("name"),
+            body = string("body"),
+            htmlUrl = string("html_url"),
             apkAsset = UpdateAsset(
-                name = asset.name,
-                downloadUrl = asset.browserDownloadUrl,
-                size = asset.size,
-                sha256 = asset.digest
+                name = asset.string("name"),
+                downloadUrl = asset.string("browser_download_url"),
+                size = asset.long("size"),
+                sha256 = asset.stringOrNull("digest")
                     ?.removePrefix("sha256:")
                     ?.takeIf { it.isNotBlank() }
             )
         )
     }
 
-    private data class GithubReleaseDto(
-        @SerializedName("tag_name")
-        val tagName: String = "",
-        val name: String = "",
-        val body: String = "",
-        val draft: Boolean = false,
-        val prerelease: Boolean = false,
-        @SerializedName("html_url")
-        val htmlUrl: String = "",
-        val assets: List<GithubAssetDto> = emptyList()
-    )
+    private fun JsonElement.asObjectOrNull(): JsonObject? =
+        takeIf { it.isJsonObject }?.asJsonObject
 
-    private data class GithubAssetDto(
-        val name: String = "",
-        @SerializedName("browser_download_url")
-        val browserDownloadUrl: String = "",
-        val size: Long = 0,
-        val digest: String? = null
-    )
+    private fun JsonElement.asArrayOrNull(): JsonArray? =
+        takeIf { it.isJsonArray }?.asJsonArray
+
+    private fun JsonObject.array(name: String): JsonArray? =
+        get(name)?.takeIf { it.isJsonArray }?.asJsonArray
+
+    private fun JsonObject.string(name: String): String =
+        stringOrNull(name).orEmpty()
+
+    private fun JsonObject.stringOrNull(name: String): String? =
+        get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+
+    private fun JsonObject.boolean(name: String): Boolean =
+        get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean ?: false
+
+    private fun JsonObject.long(name: String): Long =
+        get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asLong ?: 0L
 }

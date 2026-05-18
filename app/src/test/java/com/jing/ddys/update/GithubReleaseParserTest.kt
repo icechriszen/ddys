@@ -172,4 +172,20 @@ class GithubReleaseParserTest {
         assertEquals("v1.3.3", release.tagName)
         assertEquals("abcdef", release.apkAsset.sha256)
     }
+
+    @Test
+    fun ignoresMalformedAssetsWithoutThrowing() {
+        val result = UpdateRepository.parseResponse(
+            200,
+            """
+            {
+              "tag_name": "v1.3.4",
+              "name": "v1.3.4",
+              "assets": {}
+            }
+            """.trimIndent()
+        )
+
+        assertTrue(result is UpdateFetchResult.NoRelease)
+    }
 }
