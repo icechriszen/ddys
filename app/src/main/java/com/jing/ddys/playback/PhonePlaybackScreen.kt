@@ -1,19 +1,25 @@
 package com.jing.ddys.playback
 
 import TrafficSpeedCalculatorBandwidthMeter
+import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
@@ -22,6 +28,8 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +47,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +120,8 @@ fun PhonePlaybackScreen(
     var errorText by remember { mutableStateOf<String?>(null) }
     var speedText by remember { mutableStateOf("") }
     var backPressed by remember { mutableStateOf(false) }
+    val topControlsFocusRequester = remember { FocusRequester() }
+    val showEpisodeChooser = PlaybackEpisodeControls.shouldShowEpisodeChooser(videoDetail.episodes.size)
 
     DisposableEffect(player, lifecycleOwner) {
         val listener = object : Player.Listener {
@@ -281,7 +293,24 @@ fun PhonePlaybackScreen(
     ) {
         AndroidView(
             factory = {
-                PlayerView(it).apply {
+                object : PlayerView(it) {
+                    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                        if (PlaybackRemoteFocus.shouldMoveFocusToTopControls(
+                                keyCode = event.keyCode,
+                                action = event.action,
+                                controlsVisible = controlsVisible
+                            )
+                        ) {
+                            return runCatching {
+                                topControlsFocusRequester.requestFocus()
+                                true
+                            }.getOrDefault(false)
+                        }
+                        return super.dispatchKeyEvent(event)
+                    }
+                }.apply {
+                    isFocusable = true
+                    isFocusableInTouchMode = true
                     useController = true
                     controllerAutoShow = true
                     controllerHideOnTouch = true
@@ -302,11 +331,13 @@ fun PhonePlaybackScreen(
                 title = videoDetail.title,
                 episodeName = episodeName,
                 hasNext = videoIndex < videoDetail.episodes.size - 1,
+                showEpisodeChooser = showEpisodeChooser,
                 onExit = onExit,
                 onReplay = {
                     player.seekTo(0L)
                     player.play()
                 },
+                firstActionFocusRequester = topControlsFocusRequester,
                 onNext = {
                     player.pause()
                     viewModel.playNextEpisodeIfExists()
@@ -411,6 +442,8 @@ private fun PhonePlaybackTopControls(
     title: String,
     episodeName: String,
     hasNext: Boolean,
+    showEpisodeChooser: Boolean,
+    firstActionFocusRequester: FocusRequester,
     onExit: () -> Unit,
     onReplay: () -> Unit,
     onNext: () -> Unit,
@@ -420,6 +453,7 @@ private fun PhonePlaybackTopControls(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .background(Color.Black.copy(alpha = 0.58f))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -440,10 +474,18 @@ private fun PhonePlaybackTopControls(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = onChooseEpisode) {
-            Icon(Icons.Default.PlaylistPlay, contentDescription = "episodes", tint = Color.White)
+        if (showEpisodeChooser) {
+            IconButton(
+                onClick = onChooseEpisode,
+                modifier = Modifier.focusRequester(firstActionFocusRequester)
+            ) {
+                Icon(Icons.Default.PlaylistPlay, contentDescription = "episodes", tint = Color.White)
+            }
         }
-        IconButton(onClick = onWatchTogether) {
+        IconButton(
+            onClick = onWatchTogether,
+            modifier = if (showEpisodeChooser) Modifier else Modifier.focusRequester(firstActionFocusRequester)
+        ) {
             Icon(Icons.Default.Groups, contentDescription = "watch together", tint = Color.White)
         }
         IconButton(onClick = onReplay) {
@@ -474,16 +516,37 @@ private fun WatchTogetherDialog(
     if (session != null) {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("一起看房间") },
+            title = {
+                WatchTogetherDialogTitle(text = "一起看房间")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("房间码: ${session.roomCode}")
-                    Text("成员: ${session.memberCount}")
-                    errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            WatchTogetherStatusRow(label = "房间码", value = session.roomCode)
+                            WatchTogetherStatusRow(label = "成员", value = "${session.memberCount}")
+                        }
+                    }
+                    errorText?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = onDismiss) {
+                Button(onClick = onDismiss) {
                     Text("关闭")
                 }
             },
@@ -497,19 +560,73 @@ private fun WatchTogetherDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("一起看") },
+        title = {
+            WatchTogetherDialogTitle(text = "一起看")
+        },
         text = {
-            errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "同步当前影片、集数和播放进度",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                errorText?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = onCreateRoom) {
+            Button(onClick = onCreateRoom) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("创建房间")
             }
         },
         dismissButton = {
             TextButton(onClick = onJoinRoom) {
+                Icon(
+                    imageVector = Icons.Default.Groups,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("加入房间")
             }
         }
     )
+}
+
+@Composable
+private fun WatchTogetherDialogTitle(text: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Groups, contentDescription = null)
+        Text(text = text)
+    }
+}
+
+@Composable
+private fun WatchTogetherStatusRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(text = value, style = MaterialTheme.typography.titleMedium)
+    }
 }

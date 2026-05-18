@@ -40,4 +40,29 @@ class WpsePlaylistParserTest {
         assertEquals("第一集", episodes[1].name)
         assertEquals("第2季 第一集", episodes[1].displayName)
     }
+
+    @Test
+    fun singleSeasonPlaylistDoesNotAttachSeasonName() {
+        val document = Jsoup.parse(
+            """
+            <script class="wpse-playlist-data" type="application/json">
+            {
+              "seasons": [
+                {
+                  "title": "1",
+                  "tracks": [
+                    { "src": "/videos/movie.m3u8", "title": "正片" }
+                  ]
+                }
+              ]
+            }
+            </script>
+            """.trimIndent()
+        )
+
+        val episodes = WpsePlaylistParser.parse(document, "/movie/")
+
+        assertEquals("", episodes.single().seasonName)
+        assertEquals("正片", episodes.single().displayName)
+    }
 }

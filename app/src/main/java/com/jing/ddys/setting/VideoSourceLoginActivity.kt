@@ -35,7 +35,7 @@ class VideoSourceLoginActivity : Activity() {
         webView = try {
             WebView(this)
         } catch (ex: Exception) {
-            showLongToast("当前设备不支持网页登录，请启用 Android System WebView 后重试")
+            showLongToast("当前设备不支持网站登录，请启用 Android System WebView 后重试")
             finish()
             return
         }
@@ -56,7 +56,7 @@ class VideoSourceLoginActivity : Activity() {
                         fillPassword(view)
                     } else if (VideoSourceAuth.saveAuthCookieFromWebView()) {
                         CookieManager.getInstance().flush()
-                        showShortToast("视频源登录成功")
+                        showShortToast("网站登录成功")
                         setResult(RESULT_OK)
                         finish()
                     }

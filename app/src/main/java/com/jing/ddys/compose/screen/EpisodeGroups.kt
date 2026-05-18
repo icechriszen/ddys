@@ -9,10 +9,11 @@ internal data class EpisodeGroup(
 )
 
 internal fun List<VideoEpisode>.toEpisodeGroups(): List<EpisodeGroup> {
-    if (none { it.seasonName.isNotBlank() }) {
+    val seasonNames = map { it.seasonName }.filter { it.isNotBlank() }.distinct()
+    if (seasonNames.size <= 1) {
         return listOf(
             EpisodeGroup(
-                title = "选集",
+                title = if (size > 1) "选集" else "",
                 episodes = withIndex().toList(),
                 showSeasonInEpisodeName = false
             )
