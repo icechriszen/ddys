@@ -12,6 +12,7 @@ object WpsePlaylistParser {
             ?: return emptyList()
         val seasons = (gson.fromJson(playlistJson, Map::class.java)["seasons"] as? List<*>)
             ?: return emptyList()
+        val showSeasonName = seasons.size > 1
         return seasons.flatMap { season ->
             val seasonInfo = season as? Map<*, *> ?: return@flatMap emptyList()
             val seasonTitle = seasonInfo["title"]?.toString()?.trim().orEmpty()
@@ -28,7 +29,7 @@ object WpsePlaylistParser {
                     id = src.ifEmpty { "$videoId|$seasonTitle|$name" },
                     name = name,
                     subTitleUrl = "",
-                    seasonName = seasonTitle,
+                    seasonName = seasonTitle.takeIf { showSeasonName }.orEmpty(),
                     src0 = src
                 )
             }

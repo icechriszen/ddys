@@ -155,7 +155,7 @@ object HttpUtil {
                 seasonUrl = url.takeIf { it.isNotEmpty() },
                 currentSeason = url.isEmpty()
             )
-        } ?: emptyList()
+        }?.takeIf { it.size > 1 } ?: emptyList()
         val relatedVideos = document.select(".crp_related li").map { li ->
             val url = li.selectFirst("a")!!.absUrl("href")
             val imgSrc = li.selectFirst("img")?.let {

@@ -339,7 +339,7 @@ fun VideoSeasonRow(seasons: List<VideoSeason>, onSeasonClick: (VideoSeason) -> U
                     items(seasons.size, key = { seasons[it].seasonName }) { seasonIndex ->
                         val season = seasons[seasonIndex]
                         TextLabel(
-                            text = "第${season.seasonName}季",
+                            text = VideoEpisode.formatSeasonName(season.seasonName),
                             enabled = !season.currentSeason,
                             modifier = if (seasonIndex == 0) Modifier.initiallyFocused() else Modifier.restorableFocus()
                         ) {
@@ -389,8 +389,10 @@ fun ContentWithTitle(
     content: @Composable () -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Text(text = title, style = textStyle)
-        Spacer(modifier = Modifier.height(space))
+        if (title.isNotBlank()) {
+            Text(text = title, style = textStyle)
+            Spacer(modifier = Modifier.height(space))
+        }
         content()
     }
 }

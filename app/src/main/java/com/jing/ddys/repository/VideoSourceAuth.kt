@@ -12,7 +12,7 @@ data class VideoSourceConfig(
     val password: String = "ddys"
 )
 
-class SourceAuthRequiredException : RuntimeException("视频源需要登录，请到设置中打开视频源登录")
+class SourceAuthRequiredException : RuntimeException("网站需要登录，请到设置中打开网站登录")
 
 object VideoSourceAuth {
 

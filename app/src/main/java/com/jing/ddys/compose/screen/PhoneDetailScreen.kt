@@ -59,6 +59,7 @@ import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.SourceAuthRequiredException
 import com.jing.ddys.repository.VideoCardInfo
 import com.jing.ddys.repository.VideoDetailInfo
+import com.jing.ddys.repository.VideoEpisode
 import com.jing.ddys.room.entity.VideoHistory
 import com.jing.ddys.setting.VideoSourceLoginActivity
 
@@ -187,7 +188,7 @@ private fun PhoneDetailContent(viewModel: DetailViewModel, videoDetail: VideoDet
                                 season.seasonUrl?.let { DetailActivity.navigateTo(context, it) }
                             }
                         ) {
-                            Text(text = "第${season.seasonName}季")
+                            Text(text = VideoEpisode.formatSeasonName(season.seasonName))
                         }
                     }
                 }
@@ -265,7 +266,9 @@ private fun PhoneHorizontalButtons(
     content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
+        if (title.isNotBlank()) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+        }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
