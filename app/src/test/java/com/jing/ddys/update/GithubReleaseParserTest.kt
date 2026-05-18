@@ -144,4 +144,32 @@ class GithubReleaseParserTest {
         assertTrue(UpdateRepository.parseResponse(404, "") is UpdateFetchResult.NoRelease)
         assertTrue(UpdateRepository.parseResponse(403, "") is UpdateFetchResult.Failure)
     }
+
+    @Test
+    fun mapsStaticManifestToFoundRelease() {
+        val result = UpdateRepository.parseResponse(
+            200,
+            """
+            {
+              "tag_name": "v1.3.3",
+              "name": "v1.3.3",
+              "body": "",
+              "html_url": "https://github.com/icechriszen/ddys/releases/tag/v1.3.3",
+              "assets": [
+                {
+                  "name": "ddys-v1.3.3.apk",
+                  "browser_download_url": "https://github.com/icechriszen/ddys/releases/download/v1.3.3/ddys-v1.3.3.apk",
+                  "size": 123456,
+                  "digest": "sha256:abcdef"
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        assertTrue(result is UpdateFetchResult.Found)
+        val release = (result as UpdateFetchResult.Found).release
+        assertEquals("v1.3.3", release.tagName)
+        assertEquals("abcdef", release.apkAsset.sha256)
+    }
 }

@@ -1,5 +1,6 @@
 package com.jing.ddys.update
 
+import com.jing.ddys.BuildConfig
 import com.jing.ddys.setting.NetworkProxySettings
 import com.jing.ddys.setting.SettingsViewModel
 import okhttp3.OkHttpClient
@@ -14,6 +15,12 @@ object UpdateHttpClientFactory {
         return OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", "ddys-tv/${BuildConfig.VERSION_NAME} (Android)")
+                    .build()
+                chain.proceed(request)
+            }
             .apply {
                 if (proxySettings.proxyEnabled) {
                     proxy(

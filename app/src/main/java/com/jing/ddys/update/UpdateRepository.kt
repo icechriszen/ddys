@@ -10,13 +10,27 @@ class UpdateRepository(
 ) {
 
     suspend fun fetchLatestRelease(): UpdateFetchResult = withContext(Dispatchers.IO) {
+        val manifestResult = fetchRelease(UPDATE_MANIFEST_URL)
+        if (manifestResult is UpdateFetchResult.Found) {
+            manifestResult
+        } else {
+            val apiResult = fetchRelease(RELEASES_API_URL)
+            when {
+                apiResult is UpdateFetchResult.Found -> apiResult
+                manifestResult is UpdateFetchResult.Failure && apiResult is UpdateFetchResult.NoRelease -> manifestResult
+                else -> apiResult
+            }
+        }
+    }
+
+    private fun fetchRelease(url: String): UpdateFetchResult {
         val request = Request.Builder()
-            .url(LATEST_RELEASE_URL)
+            .url(url)
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .get()
             .build()
-        runCatching {
+        return runCatching {
             client.newCall(request).execute().use { response ->
                 parseResponse(response.code, response.body?.string().orEmpty())
             }
@@ -26,7 +40,9 @@ class UpdateRepository(
     }
 
     companion object {
-        private const val LATEST_RELEASE_URL =
+        private const val UPDATE_MANIFEST_URL =
+            "https://github.com/icechriszen/ddys/releases/latest/download/update.json"
+        private const val RELEASES_API_URL =
             "https://api.github.com/repos/icechriszen/ddys/releases?per_page=10"
 
         fun parseResponse(code: Int, body: String): UpdateFetchResult {

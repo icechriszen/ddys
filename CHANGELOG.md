@@ -6,6 +6,12 @@
 
 暂无。
 
+## 1.3.3 - 2026-05-18
+
+- 修复软件更新检查可能因 GitHub REST API 未认证限流返回 HTTP 403 的问题。
+- 发布流程新增 `update.json` 静态更新清单，客户端优先通过 Release 静态资产发现新版本，并保留 GitHub API 作为 fallback。
+- 更新请求增加明确的 User-Agent，避免被 GitHub administrative rules 拒绝。
+
 ## 1.3.2 - 2026-05-18
 
 - 修复软件更新检查在可安装 APK 已发布时仍可能显示“暂无发布版本”的问题。

@@ -60,13 +60,33 @@ jobs:
             "$aligned_apk"
           "$build_tools_dir/apksigner" verify --verbose "$signed_apk"
 
-          sha256sum ddys-${{ github.ref_name }}.apk > ddys-${{ github.ref_name }}.apk.sha256
+          apk_sha256="$(sha256sum "$signed_apk" | awk '{print $1}')"
+          apk_size="$(stat -c%s "$signed_apk")"
+          sha256sum "$signed_apk" > "$signed_apk.sha256"
+
+          cat > update.json <<EOF
+          {
+            "tag_name": "${{ github.ref_name }}",
+            "name": "${{ github.ref_name }}",
+            "body": "",
+            "html_url": "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}",
+            "assets": [
+              {
+                "name": "$signed_apk",
+                "browser_download_url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$signed_apk",
+                "size": $apk_size,
+                "digest": "sha256:$apk_sha256"
+              }
+            ]
+          }
+          EOF
 
       - name: Release
         run: |
           gh release create "${{ github.ref_name }}" \
             ddys-${{ github.ref_name }}.apk \
             ddys-${{ github.ref_name }}.apk.sha256 \
+            update.json \
             --title "${{ github.ref_name }}" \
             --generate-notes
         env:
