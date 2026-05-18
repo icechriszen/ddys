@@ -10,14 +10,29 @@ object GithubReleaseParser {
     fun parse(json: String): UpdateRelease? {
         val dto = runCatching { gson.fromJson(json, GithubReleaseDto::class.java) }.getOrNull()
             ?: return null
-        val asset = dto.assets.firstOrNull {
+        return dto.toUpdateReleaseOrNull()
+    }
+
+    fun parseFirstWithApk(json: String): UpdateRelease? {
+        val releases = runCatching {
+            gson.fromJson(json, Array<GithubReleaseDto>::class.java).toList()
+        }.getOrNull() ?: return parse(json)
+
+        return releases.asSequence()
+            .filter { !it.draft && !it.prerelease }
+            .mapNotNull { it.toUpdateReleaseOrNull() }
+            .firstOrNull()
+    }
+
+    private fun GithubReleaseDto.toUpdateReleaseOrNull(): UpdateRelease? {
+        val asset = assets.firstOrNull {
             it.name.endsWith(".apk", ignoreCase = true) && it.browserDownloadUrl.isNotBlank()
         } ?: return null
         return UpdateRelease(
-            tagName = dto.tagName.takeIf { it.isNotBlank() } ?: return null,
-            releaseName = dto.name,
-            body = dto.body,
-            htmlUrl = dto.htmlUrl,
+            tagName = tagName.takeIf { it.isNotBlank() } ?: return null,
+            releaseName = name,
+            body = body,
+            htmlUrl = htmlUrl,
             apkAsset = UpdateAsset(
                 name = asset.name,
                 downloadUrl = asset.browserDownloadUrl,
@@ -34,6 +49,8 @@ object GithubReleaseParser {
         val tagName: String = "",
         val name: String = "",
         val body: String = "",
+        val draft: Boolean = false,
+        val prerelease: Boolean = false,
         @SerializedName("html_url")
         val htmlUrl: String = "",
         val assets: List<GithubAssetDto> = emptyList()

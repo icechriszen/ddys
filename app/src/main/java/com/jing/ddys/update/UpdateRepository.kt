@@ -27,7 +27,7 @@ class UpdateRepository(
 
     companion object {
         private const val LATEST_RELEASE_URL =
-            "https://api.github.com/repos/icechriszen/ddys/releases/latest"
+            "https://api.github.com/repos/icechriszen/ddys/releases?per_page=10"
 
         fun parseResponse(code: Int, body: String): UpdateFetchResult {
             if (code == 404) {
@@ -36,7 +36,7 @@ class UpdateRepository(
             if (code !in 200..299) {
                 return UpdateFetchResult.Failure("检查更新失败: HTTP $code")
             }
-            val release = GithubReleaseParser.parse(body)
+            val release = GithubReleaseParser.parseFirstWithApk(body)
                 ?: return UpdateFetchResult.NoRelease
             return UpdateFetchResult.Found(release)
         }
