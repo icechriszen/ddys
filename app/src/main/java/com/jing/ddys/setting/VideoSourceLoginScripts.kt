@@ -10,75 +10,156 @@ object VideoSourceLoginScripts {
         return """
             (function() {
                 var password = $quotedPassword;
-                var form = document.querySelector('form#loginform') || document.querySelector('form[name="loginform"]');
-                if (!form) {
-                    return;
+                var formSelector = 'form#loginform, form[name="loginform"]';
+                var submitSelector = '#wp-submit, input[type="submit"], button[type="submit"]';
+                var passwordSelector = 'input[name="password_protected_pwd"]';
+                var captchaSelector = 'input[name="captcha_code"]';
+
+                function findForm() {
+                    return document.querySelector(formSelector);
                 }
 
-                var passwordInput = form.querySelector('input[name="password_protected_pwd"]');
-                var captchaInput = form.querySelector('input[name="captcha_code"]');
-                var submit = form.querySelector('#wp-submit, input[type="submit"], button[type="submit"]');
+                function fields() {
+                    var form = findForm();
+                    return {
+                        form: form,
+                        passwordInput: form ? form.querySelector(passwordSelector) : null,
+                        captchaInput: form ? form.querySelector(captchaSelector) : null,
+                        submits: form ? Array.prototype.slice.call(form.querySelectorAll(submitSelector)) : []
+                    };
+                }
 
                 function dispatchAll(input) {
                     if (!input) {
                         return;
                     }
                     ['input', 'change', 'keyup', 'blur'].forEach(function(name) {
-                        input.dispatchEvent(new Event(name, { bubbles: true }));
+                        var event;
+                        try {
+                            event = new Event(name, { bubbles: true });
+                        } catch (error) {
+                            event = document.createEvent('Event');
+                            event.initEvent(name, true, true);
+                        }
+                        input.dispatchEvent(event);
                     });
                 }
 
-                if (passwordInput) {
-                    passwordInput.focus();
-                    passwordInput.value = password;
-                    dispatchAll(passwordInput);
+                function setInputValue(input, value) {
+                    if (!input) {
+                        return;
+                    }
+                    var descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                    if (descriptor && descriptor.set) {
+                        descriptor.set.call(input, value);
+                    } else {
+                        input.value = value;
+                    }
+                    dispatchAll(input);
                 }
 
                 function visibleFieldsReady() {
+                    var current = fields();
+                    var passwordInput = current.passwordInput;
+                    var captchaInput = current.captchaInput;
                     var hasPassword = !!(passwordInput && passwordInput.value && passwordInput.value.length > 0);
                     var hasCaptcha = !captchaInput || !!(captchaInput.value && captchaInput.value.trim().length > 0);
                     return hasPassword && hasCaptcha;
                 }
 
-                function enableSubmitIfReady() {
-                    if (!submit || !visibleFieldsReady()) {
+                function enableSubmit(submit) {
+                    if (!submit) {
                         return;
                     }
                     submit.disabled = false;
                     submit.removeAttribute('disabled');
+                    submit.setAttribute('aria-disabled', 'false');
+                    submit.classList.remove('disabled');
+                    submit.classList.remove('is-disabled');
                     submit.style.opacity = '1';
                     submit.style.pointerEvents = 'auto';
+                    submit.style.cursor = 'pointer';
                 }
 
-                if (captchaInput) {
-                    captchaInput.addEventListener('input', enableSubmitIfReady);
-                    captchaInput.addEventListener('change', enableSubmitIfReady);
-                    captchaInput.addEventListener('keyup', enableSubmitIfReady);
+                function enableSubmitIfReady() {
+                    var current = fields();
+                    if (!current.form) {
+                        return;
+                    }
+                    if (current.passwordInput && current.passwordInput.value !== password) {
+                        current.passwordInput.focus();
+                        setInputValue(current.passwordInput, password);
+                    }
+                    if (!visibleFieldsReady()) {
+                        return;
+                    }
+                    current.submits.forEach(enableSubmit);
                 }
 
-                if (submit && !submit.dataset.ddysSubmitPatched) {
-                    submit.dataset.ddysSubmitPatched = '1';
-                    submit.addEventListener('click', function(event) {
+                function submitFormIfReady(event) {
+                    var current = fields();
+                    if (!current.form || !visibleFieldsReady()) {
+                        return;
+                    }
+                    enableSubmitIfReady();
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (event.stopImmediatePropagation) {
+                            event.stopImmediatePropagation();
+                        }
+                    }
+                    HTMLFormElement.prototype.submit.call(current.form);
+                }
+
+                function patchForm() {
+                    var current = fields();
+                    if (!current.form || current.form.getAttribute('data-ddys-submit-patched') === '1') {
+                        return;
+                    }
+                    current.form.setAttribute('data-ddys-submit-patched', '1');
+                    current.form.addEventListener('input', enableSubmitIfReady, true);
+                    current.form.addEventListener('change', enableSubmitIfReady, true);
+                    current.form.addEventListener('keyup', enableSubmitIfReady, true);
+                    current.form.addEventListener('click', function(event) {
+                        var target = event.target;
+                        var submit = target && target.closest ? target.closest(submitSelector) : null;
+                        if (!submit) {
+                            return;
+                        }
+                        submitFormIfReady(event);
+                    }, true);
+                    current.form.addEventListener('submit', function(event) {
                         enableSubmitIfReady();
                         if (!visibleFieldsReady()) {
                             return;
                         }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        event.stopImmediatePropagation();
-                        HTMLFormElement.prototype.submit.call(form);
+                        submitFormIfReady(event);
                     }, true);
                 }
 
+                patchForm();
                 enableSubmitIfReady();
                 var checks = 0;
                 var timer = window.setInterval(function() {
+                    patchForm();
                     enableSubmitIfReady();
                     checks++;
-                    if (checks > 120 || visibleFieldsReady()) {
+                    if (checks > 480) {
                         window.clearInterval(timer);
                     }
                 }, 250);
+                if (window.MutationObserver) {
+                    new MutationObserver(function() {
+                        patchForm();
+                        enableSubmitIfReady();
+                    }).observe(document.documentElement, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ['disabled', 'class', 'style', 'aria-disabled']
+                    });
+                }
             })();
         """.trimIndent()
     }
