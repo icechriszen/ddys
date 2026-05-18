@@ -20,6 +20,7 @@ class VideoSourceLoginScriptsTest {
 
         assertTrue(script.contains("MutationObserver"))
         assertTrue(script.contains("querySelectorAll(submitSelector)"))
+        assertTrue(script.contains("submit.hasAttribute('disabled')"))
         assertTrue(script.contains("setAttribute('aria-disabled', 'false')"))
         assertTrue(script.contains("checks > 480"))
     }
@@ -31,5 +32,14 @@ class VideoSourceLoginScriptsTest {
         assertTrue(script.contains("document.createEvent('Event')"))
         assertTrue(script.contains("event.initEvent(name, true, true)"))
         assertTrue(script.contains("Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')"))
+    }
+
+    @Test
+    fun loginScriptDoesNotStealCaptchaInputFocus() {
+        val script = VideoSourceLoginScripts.buildEnhanceLoginFormScript("ddys")
+
+        assertTrue(!script.contains(".focus()"))
+        assertTrue(script.contains("observerScheduled"))
+        assertTrue(script.contains("window.setTimeout(function()"))
     }
 }

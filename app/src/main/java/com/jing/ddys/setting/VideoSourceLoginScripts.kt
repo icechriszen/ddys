@@ -71,14 +71,30 @@ object VideoSourceLoginScripts {
                     if (!submit) {
                         return;
                     }
-                    submit.disabled = false;
-                    submit.removeAttribute('disabled');
-                    submit.setAttribute('aria-disabled', 'false');
-                    submit.classList.remove('disabled');
-                    submit.classList.remove('is-disabled');
-                    submit.style.opacity = '1';
-                    submit.style.pointerEvents = 'auto';
-                    submit.style.cursor = 'pointer';
+                    if (submit.disabled) {
+                        submit.disabled = false;
+                    }
+                    if (submit.hasAttribute('disabled')) {
+                        submit.removeAttribute('disabled');
+                    }
+                    if (submit.getAttribute('aria-disabled') !== 'false') {
+                        submit.setAttribute('aria-disabled', 'false');
+                    }
+                    if (submit.classList.contains('disabled')) {
+                        submit.classList.remove('disabled');
+                    }
+                    if (submit.classList.contains('is-disabled')) {
+                        submit.classList.remove('is-disabled');
+                    }
+                    if (submit.style.opacity !== '1') {
+                        submit.style.opacity = '1';
+                    }
+                    if (submit.style.pointerEvents !== 'auto') {
+                        submit.style.pointerEvents = 'auto';
+                    }
+                    if (submit.style.cursor !== 'pointer') {
+                        submit.style.cursor = 'pointer';
+                    }
                 }
 
                 function enableSubmitIfReady() {
@@ -87,7 +103,6 @@ object VideoSourceLoginScripts {
                         return;
                     }
                     if (current.passwordInput && current.passwordInput.value !== password) {
-                        current.passwordInput.focus();
                         setInputValue(current.passwordInput, password);
                     }
                     if (!visibleFieldsReady()) {
@@ -150,9 +165,20 @@ object VideoSourceLoginScripts {
                     }
                 }, 250);
                 if (window.MutationObserver) {
+                    var observerScheduled = false;
+                    function scheduleEnhance() {
+                        if (observerScheduled) {
+                            return;
+                        }
+                        observerScheduled = true;
+                        window.setTimeout(function() {
+                            observerScheduled = false;
+                            patchForm();
+                            enableSubmitIfReady();
+                        }, 50);
+                    }
                     new MutationObserver(function() {
-                        patchForm();
-                        enableSubmitIfReady();
+                        scheduleEnhance();
                     }).observe(document.documentElement, {
                         childList: true,
                         subtree: true,
