@@ -17,8 +17,8 @@ android {
         applicationId = "com.jing.ddys"
         minSdk = 21
         targetSdk = 33
-        versionCode = 20
-        versionName = "1.3.7"
+        versionCode = 21
+        versionName = "1.3.8"
 
         vectorDrawables {
             useSupportLibrary = true

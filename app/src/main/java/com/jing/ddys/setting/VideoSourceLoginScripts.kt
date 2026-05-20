@@ -11,7 +11,6 @@ object VideoSourceLoginScripts {
             (function() {
                 var password = $quotedPassword;
                 var formSelector = 'form#loginform, form[name="loginform"]';
-                var submitSelector = '#wp-submit, input[type="submit"], button[type="submit"]';
                 var passwordSelector = 'input[name="password_protected_pwd"]';
                 var captchaSelector = 'input[name="captcha_code"]';
 
@@ -24,8 +23,7 @@ object VideoSourceLoginScripts {
                     return {
                         form: form,
                         passwordInput: form ? form.querySelector(passwordSelector) : null,
-                        captchaInput: form ? form.querySelector(captchaSelector) : null,
-                        submits: form ? Array.prototype.slice.call(form.querySelectorAll(submitSelector)) : []
+                        captchaInput: form ? form.querySelector(captchaSelector) : null
                     };
                 }
 
@@ -58,46 +56,36 @@ object VideoSourceLoginScripts {
                     dispatchAll(input);
                 }
 
-                function visibleFieldsReady() {
-                    var current = fields();
-                    var passwordInput = current.passwordInput;
-                    var captchaInput = current.captchaInput;
-                    var hasPassword = !!(passwordInput && passwordInput.value && passwordInput.value.length > 0);
-                    var hasCaptcha = !captchaInput || !!(captchaInput.value && captchaInput.value.trim().length > 0);
-                    return hasPassword && hasCaptcha;
-                }
-
-                function enableSubmit(submit) {
-                    if (!submit) {
+                function makeCaptchaEditable(captchaInput) {
+                    if (!captchaInput) {
                         return;
                     }
-                    if (submit.disabled) {
-                        submit.disabled = false;
+                    captchaInput.disabled = false;
+                    captchaInput.readOnly = false;
+                    captchaInput.removeAttribute('disabled');
+                    captchaInput.removeAttribute('readonly');
+                    captchaInput.style.pointerEvents = 'auto';
+                    captchaInput.style.webkitUserSelect = 'text';
+                    captchaInput.style.userSelect = 'text';
+                    captchaInput.style.touchAction = 'manipulation';
+                    if (!captchaInput.hasAttribute('tabindex')) {
+                        captchaInput.setAttribute('tabindex', '0');
                     }
-                    if (submit.hasAttribute('disabled')) {
-                        submit.removeAttribute('disabled');
+                    if (captchaInput.getAttribute('data-ddys-captcha-patched') === '1') {
+                        return;
                     }
-                    if (submit.getAttribute('aria-disabled') !== 'false') {
-                        submit.setAttribute('aria-disabled', 'false');
-                    }
-                    if (submit.classList.contains('disabled')) {
-                        submit.classList.remove('disabled');
-                    }
-                    if (submit.classList.contains('is-disabled')) {
-                        submit.classList.remove('is-disabled');
-                    }
-                    if (submit.style.opacity !== '1') {
-                        submit.style.opacity = '1';
-                    }
-                    if (submit.style.pointerEvents !== 'auto') {
-                        submit.style.pointerEvents = 'auto';
-                    }
-                    if (submit.style.cursor !== 'pointer') {
-                        submit.style.cursor = 'pointer';
-                    }
+                    captchaInput.setAttribute('data-ddys-captcha-patched', '1');
+                    ['touchend', 'click'].forEach(function(name) {
+                        captchaInput.addEventListener(name, function() {
+                            var input = this;
+                            window.setTimeout(function() {
+                                input.focus();
+                            }, 0);
+                        }, false);
+                    });
                 }
 
-                function enableSubmitIfReady() {
+                function enhanceVisibleFields() {
                     var current = fields();
                     if (!current.form) {
                         return;
@@ -105,26 +93,13 @@ object VideoSourceLoginScripts {
                     if (current.passwordInput && current.passwordInput.value !== password) {
                         setInputValue(current.passwordInput, password);
                     }
-                    if (!visibleFieldsReady()) {
-                        return;
+                    makeCaptchaEditable(current.captchaInput);
+                    if (current.passwordInput &&
+                        current.captchaInput &&
+                        document.activeElement === current.passwordInput
+                    ) {
+                        current.passwordInput.blur();
                     }
-                    current.submits.forEach(enableSubmit);
-                }
-
-                function submitFormIfReady(event) {
-                    var current = fields();
-                    if (!current.form || !visibleFieldsReady()) {
-                        return;
-                    }
-                    enableSubmitIfReady();
-                    if (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (event.stopImmediatePropagation) {
-                            event.stopImmediatePropagation();
-                        }
-                    }
-                    HTMLFormElement.prototype.submit.call(current.form);
                 }
 
                 function patchForm() {
@@ -133,34 +108,19 @@ object VideoSourceLoginScripts {
                         return;
                     }
                     current.form.setAttribute('data-ddys-submit-patched', '1');
-                    current.form.addEventListener('input', enableSubmitIfReady, true);
-                    current.form.addEventListener('change', enableSubmitIfReady, true);
-                    current.form.addEventListener('keyup', enableSubmitIfReady, true);
-                    current.form.addEventListener('click', function(event) {
-                        var target = event.target;
-                        var submit = target && target.closest ? target.closest(submitSelector) : null;
-                        if (!submit) {
-                            return;
-                        }
-                        submitFormIfReady(event);
-                    }, true);
-                    current.form.addEventListener('submit', function(event) {
-                        enableSubmitIfReady();
-                        if (!visibleFieldsReady()) {
-                            return;
-                        }
-                        submitFormIfReady(event);
-                    }, true);
+                    current.form.addEventListener('input', enhanceVisibleFields, true);
+                    current.form.addEventListener('change', enhanceVisibleFields, true);
+                    current.form.addEventListener('keyup', enhanceVisibleFields, true);
                 }
 
                 patchForm();
-                enableSubmitIfReady();
+                enhanceVisibleFields();
                 var checks = 0;
                 var timer = window.setInterval(function() {
                     patchForm();
-                    enableSubmitIfReady();
+                    enhanceVisibleFields();
                     checks++;
-                    if (checks > 480) {
+                    if (checks > 40) {
                         window.clearInterval(timer);
                     }
                 }, 250);
@@ -174,16 +134,87 @@ object VideoSourceLoginScripts {
                         window.setTimeout(function() {
                             observerScheduled = false;
                             patchForm();
-                            enableSubmitIfReady();
+                            enhanceVisibleFields();
                         }, 50);
                     }
                     new MutationObserver(function() {
                         scheduleEnhance();
                     }).observe(document.documentElement, {
                         childList: true,
-                        subtree: true,
-                        attributes: true,
-                        attributeFilter: ['disabled', 'class', 'style', 'aria-disabled']
+                        subtree: true
+                    });
+                }
+            })();
+        """.trimIndent()
+    }
+
+    fun buildReadAltchaChallengeUrlScript(): String {
+        return """
+            (function() {
+                var form = document.querySelector('form#loginform, form[name="loginform"]');
+                if (!form) {
+                    return '';
+                }
+                var input = form.querySelector('input[name="altcha"]');
+                if (input && input.value && input.value.length > 10) {
+                    return '';
+                }
+                var widget = form.querySelector('.password-protected-gatecha altcha-widget');
+                if (!widget) {
+                    return '';
+                }
+                return widget.getAttribute('challengeurl') || widget.getAttribute('challengeUrl') || '';
+            })();
+        """.trimIndent()
+    }
+
+    fun buildApplyAltchaPayloadScript(payload: String): String {
+        val quotedPayload = gson.toJson(payload)
+        return """
+            (function() {
+                var payload = $quotedPayload;
+                var form = document.querySelector('form#loginform, form[name="loginform"]');
+                if (!form || !payload) {
+                    return;
+                }
+                var input = form.querySelector('input[name="altcha"]');
+                if (!input) {
+                    input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'altcha';
+                    form.appendChild(input);
+                }
+                var descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                if (descriptor && descriptor.set) {
+                    descriptor.set.call(input, payload);
+                } else {
+                    input.value = payload;
+                }
+                function dispatchFieldEvent(target, name) {
+                    var event;
+                    try {
+                        event = new Event(name, { bubbles: true });
+                    } catch (error) {
+                        event = document.createEvent('Event');
+                        event.initEvent(name, true, true);
+                    }
+                    target.dispatchEvent(event);
+                }
+                ['input', 'change'].forEach(function(name) {
+                    dispatchFieldEvent(input, name);
+                    dispatchFieldEvent(form, name);
+                });
+                var widget = form.querySelector('.password-protected-gatecha altcha-widget');
+                if (widget) {
+                    ['verified', 'statechange'].forEach(function(name) {
+                        var event;
+                        try {
+                            event = new CustomEvent(name, { bubbles: true, detail: { payload: payload } });
+                        } catch (error) {
+                            event = document.createEvent('Event');
+                            event.initEvent(name, true, true);
+                        }
+                        widget.dispatchEvent(event);
                     });
                 }
             })();

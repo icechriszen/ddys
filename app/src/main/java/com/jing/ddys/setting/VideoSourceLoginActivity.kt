@@ -5,9 +5,12 @@ import android.app.Activity
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
+import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,10 +20,16 @@ import com.jing.ddys.BuildConfig
 import com.jing.ddys.ext.showLongToast
 import com.jing.ddys.ext.showShortToast
 import com.jing.ddys.repository.VideoSourceAuth
+import org.json.JSONObject
+import org.json.JSONTokener
+import java.net.HttpURLConnection
+import java.net.URL
 
 class VideoSourceLoginActivity : Activity() {
 
     private lateinit var webView: WebView
+    @Volatile
+    private var altchaFallbackRunning = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,5 +114,106 @@ class VideoSourceLoginActivity : Activity() {
             VideoSourceLoginScripts.buildEnhanceLoginFormScript(VideoSourceAuth.password),
             null
         )
+        scheduleAltchaFallback(view)
+    }
+
+    private fun scheduleAltchaFallback(view: WebView) {
+        view.postDelayed({
+            view.evaluateJavascript(
+                VideoSourceLoginScripts.buildReadAltchaChallengeUrlScript(),
+                ValueCallback { rawValue ->
+                    val challengeUrl = rawValue.toJsString().orEmpty()
+                    if (challengeUrl.isBlank()) {
+                        return@ValueCallback
+                    }
+                    solveAltchaChallenge(view, challengeUrl)
+                }
+            )
+        }, ALTCHA_FALLBACK_DELAY_MS)
+    }
+
+    private fun solveAltchaChallenge(view: WebView, challengeUrl: String) {
+        if (altchaFallbackRunning) {
+            return
+        }
+        altchaFallbackRunning = true
+        Thread {
+            try {
+                val challenge = fetchAltchaChallenge(challengeUrl)
+                val number = AltchaChallengeSolver.solveNumber(
+                    algorithm = challenge.algorithm,
+                    challenge = challenge.challenge,
+                    salt = challenge.salt,
+                    maxNumber = challenge.maxNumber
+                ) ?: throw IllegalStateException("ALTCHA challenge not solved")
+                val payload = JSONObject()
+                    .put("algorithm", challenge.algorithm)
+                    .put("challenge", challenge.challenge)
+                    .put("number", number)
+                    .put("salt", challenge.salt)
+                    .put("signature", challenge.signature)
+                    .toString()
+                val encodedPayload = Base64.encodeToString(
+                    payload.toByteArray(Charsets.UTF_8),
+                    Base64.NO_WRAP
+                )
+                view.post {
+                    view.evaluateJavascript(
+                        VideoSourceLoginScripts.buildApplyAltchaPayloadScript(encodedPayload),
+                        null
+                    )
+                }
+            } catch (ex: Exception) {
+                Log.w(TAG, "ALTCHA fallback failed", ex)
+            } finally {
+                altchaFallbackRunning = false
+            }
+        }.start()
+    }
+
+    private fun fetchAltchaChallenge(challengeUrl: String): AltchaChallenge {
+        val connection = (URL(challengeUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            requestMethod = "GET"
+            setRequestProperty("Accept", "application/json")
+        }
+        return try {
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(body)
+            AltchaChallenge(
+                algorithm = json.getString("algorithm"),
+                challenge = json.getString("challenge"),
+                maxNumber = json.optInt("maxNumber", json.optInt("maxnumber", 0)),
+                salt = json.getString("salt"),
+                signature = json.getString("signature")
+            )
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun String?.toJsString(): String? {
+        if (this == null || this == "null") {
+            return null
+        }
+        return try {
+            JSONTokener(this).nextValue() as? String
+        } catch (ex: Exception) {
+            null
+        }
+    }
+
+    private data class AltchaChallenge(
+        val algorithm: String,
+        val challenge: String,
+        val maxNumber: Int,
+        val salt: String,
+        val signature: String
+    )
+
+    companion object {
+        private const val TAG = "VideoSourceLogin"
+        private const val ALTCHA_FALLBACK_DELAY_MS = 2_000L
     }
 }
