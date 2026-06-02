@@ -189,6 +189,7 @@ object HttpUtil {
         val currentSeasonName = seasonList.firstOrNull { it.currentSeason }?.seasonName.orEmpty()
         val episodeList = LegacyPlaylistParser.parse(document, videoId, currentSeasonName)
             .ifEmpty { WpsePlaylistParser.parse(document, videoId) }
+            .ifEmpty { DdysPlaylistParser.parse(document, videoId) }
         return VideoDetailInfo(
             id = videoId,
             title = title,

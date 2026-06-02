@@ -70,6 +70,9 @@ object VideoSourceAuth {
     fun isPasswordProtectedHtml(html: String): Boolean {
         return html.contains("login-password-protected") ||
             html.contains("password_protected_pwd") ||
+            html.contains("ddys-protect-gate") ||
+            html.contains("ddys_protect_password") ||
+            html.contains("ddys_protect_action") ||
             html.contains("输入密码后才可访问网站")
     }
 

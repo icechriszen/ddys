@@ -57,17 +57,29 @@ class VideoSourceLoginScriptsTest {
     }
 
     @Test
+    fun loginScriptSupportsDdysProtectGatePasswordField() {
+        val script = VideoSourceLoginScripts.buildEnhanceLoginFormScript("ddys")
+
+        assertTrue(script.contains("input[name=\"ddys_protect_password\"]"))
+        assertTrue(script.contains("passwordInput ? passwordInput.form : null"))
+    }
+
+    @Test
     fun loginScriptCanApplyAltchaPayloadWithoutForcingSubmit() {
         val statusScript = VideoSourceLoginScripts.buildReadAltchaChallengeUrlScript()
         val applyScript = VideoSourceLoginScripts.buildApplyAltchaPayloadScript("payload")
 
         assertTrue(statusScript.contains("input[name=\"altcha\"]"))
+        assertTrue(statusScript.contains("ddys_protect_altcha_gate"))
         assertTrue(statusScript.contains("challengeurl"))
-        assertTrue(applyScript.contains("input.name = 'altcha'"))
+        assertTrue(applyScript.contains("var inputName"))
+        assertTrue(applyScript.contains("input.name = inputName"))
         assertTrue(applyScript.contains("dispatchFieldEvent(input, name)"))
         assertTrue(applyScript.contains("dispatchFieldEvent(form, name)"))
         assertTrue(applyScript.contains("CustomEvent(name"))
+        assertTrue(applyScript.contains("state: 'verified'"))
         assertTrue(!applyScript.contains("wp-submit"))
-        assertTrue(!applyScript.contains("disabled = false"))
+        assertTrue(!applyScript.contains(".submit()"))
+        assertTrue(!applyScript.contains(".click()"))
     }
 }

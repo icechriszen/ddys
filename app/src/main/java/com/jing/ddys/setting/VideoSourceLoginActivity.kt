@@ -92,7 +92,7 @@ class VideoSourceLoginActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
             addView(TextView(this@VideoSourceLoginActivity).apply {
-                text = "密码已自动填写；如出现验证，请用触屏或遥控器完成后点击登录。"
+                text = "密码已自动填写；请完成图形验证码后点击进入/登录。"
                 setTextColor(Color.WHITE)
                 textSize = 18f
                 gravity = Gravity.CENTER_VERTICAL
@@ -139,7 +139,7 @@ class VideoSourceLoginActivity : Activity() {
         altchaFallbackRunning = true
         Thread {
             try {
-                val challenge = fetchAltchaChallenge(challengeUrl)
+                val challenge = fetchAltchaChallenge(VideoSourceAuth.resolveSiteUrl(challengeUrl))
                 val number = AltchaChallengeSolver.solveNumber(
                     algorithm = challenge.algorithm,
                     challenge = challenge.challenge,

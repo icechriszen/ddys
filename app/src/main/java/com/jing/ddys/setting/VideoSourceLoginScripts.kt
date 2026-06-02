@@ -11,11 +11,16 @@ object VideoSourceLoginScripts {
             (function() {
                 var password = $quotedPassword;
                 var formSelector = 'form#loginform, form[name="loginform"]';
-                var passwordSelector = 'input[name="password_protected_pwd"]';
+                var passwordSelector = 'input[name="password_protected_pwd"], input[name="ddys_protect_password"]';
                 var captchaSelector = 'input[name="captcha_code"]';
 
                 function findForm() {
-                    return document.querySelector(formSelector);
+                    var form = document.querySelector(formSelector);
+                    if (form) {
+                        return form;
+                    }
+                    var passwordInput = document.querySelector(passwordSelector);
+                    return passwordInput ? passwordInput.form : null;
                 }
 
                 function fields() {
@@ -113,12 +118,54 @@ object VideoSourceLoginScripts {
                     current.form.addEventListener('keyup', enhanceVisibleFields, true);
                 }
 
+                function altchaInput(form) {
+                    if (!form) {
+                        return null;
+                    }
+                    var widget = form.querySelector('.password-protected-gatecha altcha-widget, .ddys-protect-pow altcha-widget, altcha-widget[name="ddys_protect_altcha_gate"]');
+                    var inputName = widget ? (widget.getAttribute('name') || 'altcha') : 'altcha';
+                    return form.querySelector('input[name="' + inputName + '"]') || form.querySelector('input[name="altcha"]');
+                }
+
+                function dispatchVerified(form, input) {
+                    var widget = form.querySelector('.password-protected-gatecha altcha-widget, .ddys-protect-pow altcha-widget, altcha-widget[name="ddys_protect_altcha_gate"]');
+                    if (!widget) {
+                        return;
+                    }
+                    ['verified', 'statechange'].forEach(function(name) {
+                        var event;
+                        try {
+                            event = new CustomEvent(name, { bubbles: true, detail: { state: 'verified', payload: input.value } });
+                        } catch (error) {
+                            event = document.createEvent('Event');
+                            event.initEvent(name, true, true);
+                        }
+                        widget.dispatchEvent(event);
+                    });
+                }
+
+                function restoreSubmitIfAltchaVerified() {
+                    var form = findForm();
+                    var input = altchaInput(form);
+                    var button = form ? form.querySelector('[data-ddys-protect-submit]') : null;
+                    if (!form || !input || !input.value || input.value.length <= 10) {
+                        return;
+                    }
+                    dispatchVerified(form, input);
+                    if (button && button.disabled && button.textContent === (button.getAttribute('data-waiting-label') || '验证中')) {
+                        button.disabled = false;
+                        button.textContent = button.getAttribute('data-ready-label') || '进入';
+                    }
+                }
+
                 patchForm();
                 enhanceVisibleFields();
+                restoreSubmitIfAltchaVerified();
                 var checks = 0;
                 var timer = window.setInterval(function() {
                     patchForm();
                     enhanceVisibleFields();
+                    restoreSubmitIfAltchaVerified();
                     checks++;
                     if (checks > 40) {
                         window.clearInterval(timer);
@@ -135,6 +182,7 @@ object VideoSourceLoginScripts {
                             observerScheduled = false;
                             patchForm();
                             enhanceVisibleFields();
+                            restoreSubmitIfAltchaVerified();
                         }, 50);
                     }
                     new MutationObserver(function() {
@@ -151,15 +199,24 @@ object VideoSourceLoginScripts {
     fun buildReadAltchaChallengeUrlScript(): String {
         return """
             (function() {
-                var form = document.querySelector('form#loginform, form[name="loginform"]');
+                function findForm() {
+                    var form = document.querySelector('form#loginform, form[name="loginform"]');
+                    if (form) {
+                        return form;
+                    }
+                    var passwordInput = document.querySelector('input[name="ddys_protect_password"]');
+                    return passwordInput ? passwordInput.form : null;
+                }
+                var form = findForm();
                 if (!form) {
                     return '';
                 }
-                var input = form.querySelector('input[name="altcha"]');
+                var widget = form.querySelector('.password-protected-gatecha altcha-widget, .ddys-protect-pow altcha-widget, altcha-widget[name="ddys_protect_altcha_gate"]');
+                var inputName = widget ? widget.getAttribute('name') : 'altcha';
+                var input = form.querySelector('input[name="' + inputName + '"]') || form.querySelector('input[name="altcha"]');
                 if (input && input.value && input.value.length > 10) {
                     return '';
                 }
-                var widget = form.querySelector('.password-protected-gatecha altcha-widget');
                 if (!widget) {
                     return '';
                 }
@@ -173,15 +230,25 @@ object VideoSourceLoginScripts {
         return """
             (function() {
                 var payload = $quotedPayload;
-                var form = document.querySelector('form#loginform, form[name="loginform"]');
+                function findForm() {
+                    var form = document.querySelector('form#loginform, form[name="loginform"]');
+                    if (form) {
+                        return form;
+                    }
+                    var passwordInput = document.querySelector('input[name="ddys_protect_password"]');
+                    return passwordInput ? passwordInput.form : null;
+                }
+                var form = findForm();
                 if (!form || !payload) {
                     return;
                 }
-                var input = form.querySelector('input[name="altcha"]');
+                var widget = form.querySelector('.password-protected-gatecha altcha-widget, .ddys-protect-pow altcha-widget, altcha-widget[name="ddys_protect_altcha_gate"]');
+                var inputName = widget ? (widget.getAttribute('name') || 'altcha') : 'altcha';
+                var input = form.querySelector('input[name="' + inputName + '"]');
                 if (!input) {
                     input = document.createElement('input');
                     input.type = 'hidden';
-                    input.name = 'altcha';
+                    input.name = inputName;
                     form.appendChild(input);
                 }
                 var descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
@@ -204,18 +271,22 @@ object VideoSourceLoginScripts {
                     dispatchFieldEvent(input, name);
                     dispatchFieldEvent(form, name);
                 });
-                var widget = form.querySelector('.password-protected-gatecha altcha-widget');
                 if (widget) {
                     ['verified', 'statechange'].forEach(function(name) {
                         var event;
                         try {
-                            event = new CustomEvent(name, { bubbles: true, detail: { payload: payload } });
+                            event = new CustomEvent(name, { bubbles: true, detail: { state: 'verified', payload: payload } });
                         } catch (error) {
                             event = document.createEvent('Event');
                             event.initEvent(name, true, true);
                         }
                         widget.dispatchEvent(event);
                     });
+                }
+                var button = form.querySelector('[data-ddys-protect-submit]');
+                if (button && button.disabled && button.textContent === (button.getAttribute('data-waiting-label') || '验证中')) {
+                    button.disabled = false;
+                    button.textContent = button.getAttribute('data-ready-label') || '进入';
                 }
             })();
         """.trimIndent()
