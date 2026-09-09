@@ -46,15 +46,26 @@ object DdysPlaylistParser {
     }
 
     private fun resolveTrackUrl(src: String, server: String?): String {
+        val normalizedSrc = src.trim()
+        // New playlists already include the selected node's complete URL in src.
+        // The server field remains present for compatibility with older players.
+        if (normalizedSrc.startsWith("https://") ||
+            normalizedSrc.startsWith("http://")
+        ) {
+            return normalizedSrc
+        }
+        if (normalizedSrc.startsWith("//")) {
+            return "https:$normalizedSrc"
+        }
         val normalizedServer = server?.trim()?.trimEnd('/')
             ?.removePrefix("https://")
             ?.removePrefix("http://")
         return if (normalizedServer.isNullOrBlank()) {
-            src
+            normalizedSrc
         } else if (normalizedServer.contains('.')) {
-            "https://$normalizedServer/" + src.trimStart('/')
+            "https://$normalizedServer/" + normalizedSrc.trimStart('/')
         } else {
-            "https://$normalizedServer.ddys.app/" + src.trimStart('/')
+            "https://$normalizedServer.ddys.app/" + normalizedSrc.trimStart('/')
         }
     }
 

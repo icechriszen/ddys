@@ -7,6 +7,83 @@ import org.junit.Test
 class DdysPlaylistParserTest {
 
     @Test
+    fun preservesAbsoluteSourceInNodePlaylist() {
+        val document = Jsoup.parse(
+            """
+            <script class="ddys-playlist-data" type="application/json">
+            {
+              "playlistType": "movie",
+              "nodes": [
+                { "id": "v1", "access": "vip" },
+                { "id": "v3", "access": "public" },
+                { "id": "v2", "access": "public" }
+              ],
+              "seasons": [{
+                "title": "第1季",
+                "tracks": [{
+                  "src": "https://v3.ddys.app/v2/movie/example.mp4",
+                  "server": "v3",
+                  "title": "正片",
+                  "episode": 1,
+                  "nodeSources": {
+                    "v3": "https://v3.ddys.app/v2/movie/example.mp4",
+                    "v2": "https://v2.ddys.app/v2/movie/example.mp4"
+                  }
+                }]
+              }]
+            }
+            </script>
+            """.trimIndent()
+        )
+
+        val episode = DdysPlaylistParser.parse(document, "/movie/").single()
+
+        assertEquals("https://v3.ddys.app/v2/movie/example.mp4", episode.src0)
+        assertEquals("/movie/|第1季|https://v3.ddys.app/v2/movie/example.mp4", episode.id)
+        assertEquals("正片", episode.displayName)
+    }
+
+    @Test
+    fun absoluteSourceTakesPrecedenceOverServerAndKeepsQuery() {
+        assertEquals(
+            "https://cdn.example.com/movie.mp4?token=example&expires=123#t=10",
+            parseSource(" https://cdn.example.com/movie.mp4?token=example&expires=123#t=10 ", "v3")
+        )
+        assertEquals(
+            "http://cdn.example.com/movie.mp4",
+            parseSource("http://cdn.example.com/movie.mp4", "https://v3.ddys.app/")
+        )
+    }
+
+    @Test
+    fun resolvesProtocolRelativeSourceWithoutPrependingServer() {
+        assertEquals(
+            "https://cdn.example.com/movie.mp4",
+            parseSource("//cdn.example.com/movie.mp4", "v3")
+        )
+    }
+
+    @Test
+    fun keepsLegacyRelativeSourcesWithAndWithoutServer() {
+        assertEquals("/v2/movie/example.mp4", parseSource("/v2/movie/example.mp4", ""))
+        assertEquals(
+            "https://v3.ddys.app/v2/movie/example.mp4",
+            parseSource("v2/movie/example.mp4", "https://v3.ddys.app/")
+        )
+    }
+
+    private fun parseSource(src: String, server: String): String {
+        val document = Jsoup.parse(
+            """
+            <script class="ddys-playlist-data" type="application/json">
+            { "seasons": [{ "tracks": [{ "src": "$src", "server": "$server" }] }] }
+            </script>
+            """.trimIndent()
+        )
+        return DdysPlaylistParser.parse(document, "/movie/").single().src0
+    }
+
+    @Test
     fun parsesDdysPlaylistDataWithServerHost() {
         val document = Jsoup.parse(
             """
