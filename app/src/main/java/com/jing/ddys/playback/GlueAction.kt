@@ -22,3 +22,10 @@ class WatchTogetherAction(context: Context) : Action(40) {
         icon = ContextCompat.getDrawable(context, R.drawable.watch_together)
     }
 }
+
+class OperationModeAction(context: Context) : Action(50) {
+    init {
+        icon = ContextCompat.getDrawable(context, R.drawable.operation_mode_phone)
+        label1 = context.getString(R.string.operation_mode_switch_to_phone)
+    }
+}

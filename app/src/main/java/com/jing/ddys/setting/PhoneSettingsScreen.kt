@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,11 +39,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.jing.ddys.R
+import com.jing.ddys.compose.rememberAppFormFactor
+import com.jing.ddys.compose.common.operationModeName
+import com.jing.ddys.compose.common.operationModeSwitchText
 import com.jing.ddys.update.UpdateState
 import com.jing.ddys.update.UpdateViewModel
 
 @Composable
 fun PhoneSettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateViewModel) {
+    val mode = rememberAppFormFactor()
+    val configuration = LocalConfiguration.current
+    val modeFocusRequester = remember { FocusRequester() }
     val proxySettings by viewModel.networkProxySettings.collectAsState()
     val sourceLoggedIn by viewModel.sourceLoggedIn.collectAsState()
     val updateState by updateViewModel.updateState.collectAsState()
@@ -58,6 +68,18 @@ fun PhoneSettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateVie
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
+        }
+        item {
+            PhoneSettingsItem(
+                modifier = Modifier.focusRequester(modeFocusRequester),
+                title = stringResource(R.string.operation_mode_title),
+                supportText = stringResource(
+                    R.string.operation_mode_setting_description,
+                    operationModeName(mode), operationModeSwitchText(mode)
+                )
+            ) {
+                viewModel.toggleOperationMode(configuration.uiMode)
+            }
         }
         item {
             PhoneSettingsItem(
@@ -112,6 +134,8 @@ fun PhoneSettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateVie
         }
     }
 
+    LaunchedEffect(Unit) { modeFocusRequester.requestFocus() }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -136,11 +160,13 @@ fun PhoneSettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateVie
 }
 
 @Composable
-private fun PhoneSettingsItem(title: String, supportText: String, onClick: () -> Unit) {
+private fun PhoneSettingsItem(
+    title: String, supportText: String, modifier: Modifier = Modifier, onClick: () -> Unit
+) {
     ListItem(
         headlineContent = { Text(text = title) },
         supportingContent = { Text(text = supportText) },
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     )

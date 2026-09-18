@@ -26,7 +26,7 @@ object UpdateHttpClientFactory {
                     proxy(
                         Proxy(
                             Proxy.Type.HTTP,
-                            InetSocketAddress(proxySettings.proxyHost, proxySettings.proxyPort)
+                            InetSocketAddress.createUnresolved(proxySettings.proxyHost, proxySettings.proxyPort)
                         )
                     )
                 }

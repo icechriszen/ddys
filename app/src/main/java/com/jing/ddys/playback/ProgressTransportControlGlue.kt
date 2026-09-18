@@ -55,6 +55,7 @@ class ProgressTransportControlGlue<T : PlayerAdapter>(
     context: Context,
     playerAdapter: T,
     private val onCreatePrimaryAction: (ArrayObjectAdapter) -> Unit = {},
+    private val onCreateSecondaryAction: (ArrayObjectAdapter) -> Unit = {},
     private val updateProgress: () -> Unit
 ) : PlaybackTransportControlGlue<T>(context, playerAdapter) {
 
@@ -85,6 +86,11 @@ class ProgressTransportControlGlue<T : PlayerAdapter>(
             add(skipForwardAction)
         }
         onCreatePrimaryAction.invoke(primaryActionsAdapter)
+    }
+
+    override fun onCreateSecondaryActions(secondaryActionsAdapter: ArrayObjectAdapter) {
+        super.onCreateSecondaryActions(secondaryActionsAdapter)
+        onCreateSecondaryAction(secondaryActionsAdapter)
     }
 
     fun changeSkipNextVisibility(show: Boolean) {

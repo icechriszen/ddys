@@ -46,6 +46,10 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
+    fun toggleOperationMode(uiMode: Int) {
+        DdysApplication.context.operationModeSettings.toggle(uiMode)
+    }
+
     companion object {
         fun getSettingSharedPreference(): SharedPreferences =
             DdysApplication.context.getSharedPreferences("settings", Context.MODE_PRIVATE)

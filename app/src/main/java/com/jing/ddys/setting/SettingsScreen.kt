@@ -1,6 +1,7 @@
 package com.jing.ddys.setting
 
 import android.app.Activity
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -38,13 +41,17 @@ import com.jing.ddys.BuildConfig
 import com.jing.ddys.R
 import com.jing.ddys.compose.AppFormFactor
 import com.jing.ddys.compose.rememberAppFormFactor
+import com.jing.ddys.compose.common.operationModeName
+import com.jing.ddys.compose.common.operationModeSwitchText
 import com.jing.ddys.update.UpdateState
 import com.jing.ddys.update.UpdateViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateViewModel) {
-    if (rememberAppFormFactor() == AppFormFactor.Phone) {
+    val mode = rememberAppFormFactor()
+    val configuration = LocalConfiguration.current
+    if (mode == AppFormFactor.Phone) {
         PhoneSettingsScreen(viewModel = viewModel, updateViewModel = updateViewModel)
         return
     }
@@ -77,7 +84,22 @@ fun SettingsScreen(viewModel: SettingsViewModel, updateViewModel: UpdateViewMode
             item {
                 Column {
                     SettingsItem(
-                        modifier = Modifier.focusRequester(defaultFocusRequester),
+                        modifier = Modifier
+                            .focusRequester(defaultFocusRequester)
+                            .pointerInput(configuration.uiMode) {
+                                detectTapGestures {
+                                    viewModel.toggleOperationMode(configuration.uiMode)
+                                }
+                            },
+                        title = stringResource(R.string.operation_mode_title),
+                        supportText = stringResource(
+                            R.string.operation_mode_setting_description,
+                            operationModeName(mode), operationModeSwitchText(mode)
+                        )
+                    ) {
+                        viewModel.toggleOperationMode(configuration.uiMode)
+                    }
+                    SettingsItem(
                         title = stringResource(R.string.video_source_login_title),
                         supportText = if (sourceLoggedIn) {
                             stringResource(R.string.video_source_login_ready)

@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -69,6 +70,7 @@ import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.PlayerView
 import com.jing.ddys.ext.secondsToDuration
+import com.jing.ddys.compose.common.OperationModeButton
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
 import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
@@ -120,6 +122,8 @@ fun PhonePlaybackScreen(
     var errorText by remember { mutableStateOf<String?>(null) }
     var speedText by remember { mutableStateOf("") }
     var backPressed by remember { mutableStateOf(false) }
+    var loadedEpisodeIndex by remember { mutableStateOf<Int?>(null) }
+    var capturedOnPause by remember { mutableStateOf(false) }
     val topControlsFocusRequester = remember { FocusRequester() }
     val showEpisodeChooser = PlaybackEpisodeControls.shouldShowEpisodeChooser(videoDetail.episodes.size)
 
@@ -132,10 +136,10 @@ fun PhonePlaybackScreen(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
+                if (isPlaying && loadedEpisodeIndex == viewModel.videoIndex.value) {
                     viewModel.startSaveHistory()
                 } else {
-                    viewModel.saveHistory()
+                    if (loadedEpisodeIndex == viewModel.videoIndex.value) viewModel.saveHistory()
                     viewModel.stopSaveHistory()
                 }
             }
@@ -147,17 +151,18 @@ fun PhonePlaybackScreen(
             }
         }
         val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) capturedOnPause = false
             if (event == Lifecycle.Event.ON_PAUSE) {
-                viewModel.resumePosition = player.currentPosition
+                viewModel.capturePlaybackUiState(player, loadedEpisodeIndex)
+                capturedOnPause = true
                 player.pause()
-                viewModel.saveHistory()
+                viewModel.stopSaveHistory()
             }
         }
         player.addListener(listener)
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            viewModel.resumePosition = player.currentPosition
-            viewModel.saveHistory()
+            if (!capturedOnPause) viewModel.capturePlaybackUiState(player, loadedEpisodeIndex)
             viewModel.stopSaveHistory()
             player.removeListener(listener)
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -167,8 +172,10 @@ fun PhonePlaybackScreen(
 
     LaunchedEffect(player) {
         while (isActive) {
-            viewModel.currentPlayPosition = player.currentPosition
-            viewModel.videoDuration = player.duration
+            if (loadedEpisodeIndex == viewModel.videoIndex.value) {
+                viewModel.currentPlayPosition = player.currentPosition
+                viewModel.videoDuration = player.duration.coerceAtLeast(0)
+            }
             speedText = "${trafficSpeedCalculator.getNetworkSpeed()} kb/s"
             delay(800L)
         }
@@ -176,41 +183,49 @@ fun PhonePlaybackScreen(
 
     LaunchedEffect(watchTogetherSession, player, videoIndex) {
         val session = watchTogetherSession ?: return@LaunchedEffect
-        while (isActive) {
-            when (session.role) {
-                WatchTogetherRole.Host -> {
-                    watchTogetherViewModel.publishHostState(
-                        videoDetail = videoDetail,
-                        episodeIndex = videoIndex,
-                        positionMs = player.currentPosition,
-                        durationMs = player.duration.coerceAtLeast(0L),
-                        playbackRate = player.playbackParameters.speed,
-                        paused = !player.isPlaying
-                    )
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (isActive) {
+                if (loadedEpisodeIndex != videoIndex ||
+                    (context as? VideoPlaybackActivity)?.isSwitchingOperationMode == true
+                ) {
+                    delay(1000L)
+                    continue
                 }
+                when (session.role) {
+                    WatchTogetherRole.Host -> {
+                        watchTogetherViewModel.publishHostState(
+                            videoDetail = videoDetail,
+                            episodeIndex = videoIndex,
+                            positionMs = player.currentPosition,
+                            durationMs = player.duration.coerceAtLeast(0L),
+                            playbackRate = player.playbackParameters.speed,
+                            paused = !player.playWhenReady
+                        )
+                    }
 
-                WatchTogetherRole.Member -> {
-                    val state = watchTogetherViewModel.refreshRoomState(session.roomCode)
-                    if (state != null) {
-                        if (state.episodeIndex != videoIndex) {
-                            player.pause()
-                            viewModel.changePlayVideoIndex(state.episodeIndex)
-                        } else {
-                            val targetPosition = state.estimatedPositionAt(System.currentTimeMillis())
-                            val thresholdMs = if (state.paused) 200L else 1000L
-                            if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
-                                player.seekTo(targetPosition)
-                            }
-                            if (state.paused && player.isPlaying) {
+                    WatchTogetherRole.Member -> {
+                        val state = watchTogetherViewModel.refreshRoomState(session.roomCode)
+                        if (state != null) {
+                            if (state.episodeIndex != videoIndex) {
                                 player.pause()
-                            } else if (!state.paused && !player.isPlaying) {
-                                player.play()
+                                viewModel.changePlayVideoIndex(state.episodeIndex)
+                            } else {
+                                val targetPosition = state.estimatedPositionAt(System.currentTimeMillis())
+                                val thresholdMs = if (state.paused) 200L else 1000L
+                                if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
+                                    player.seekTo(targetPosition)
+                                }
+                                if (state.paused && player.playWhenReady) {
+                                    player.pause()
+                                } else if (!state.paused && !player.playWhenReady) {
+                                    player.play()
+                                }
                             }
                         }
                     }
                 }
+                delay(1000L)
             }
-            delay(1000L)
         }
     }
 
@@ -229,6 +244,12 @@ fun PhonePlaybackScreen(
             is Resource.Success -> {
                 errorText = null
                 val history = resource.data
+                if (history.episodeIndex != viewModel.videoIndex.value) return@LaunchedEffect
+                val uiState = viewModel.consumePlaybackUiState(history.episodeIndex)
+                loadedEpisodeIndex = history.episodeIndex
+                val resumePosition = playbackStartPosition(uiState, history.lastPlayPosition, history.videoDuration)
+                viewModel.currentPlayPosition = resumePosition
+                viewModel.videoDuration = history.videoDuration.coerceAtLeast(0)
                 val videoMediaSource = mediaSourceFactory.createMediaSource(
                     MediaItem.Builder().setUri(history.url.url).build()
                 )
@@ -246,29 +267,17 @@ fun PhonePlaybackScreen(
                 } else {
                     player.setMediaSource(videoMediaSource)
                 }
+                player.restorePlaybackUiState(uiState, history)
                 player.prepare()
-                val resumePosition = when {
-                    viewModel.resumePosition > 0 -> viewModel.resumePosition.also {
-                        viewModel.resumePosition = 0
-                    }
-
-                    history.lastPlayPosition > 0 &&
-                        !(history.videoDuration > 0 && history.videoDuration - history.lastPlayPosition < 10_000) ->
-                        history.lastPlayPosition
-
-                    else -> 0L
-                }
-                if (resumePosition > 0) {
-                    player.seekTo(resumePosition)
+                if (uiState == null && resumePosition > 0) {
                     Toast.makeText(
                         context,
                         "已定位到上次播放位置:${(resumePosition / 1000).secondsToDuration()}",
                         Toast.LENGTH_SHORT
                     ).show()
-                } else if (history.videoDuration > 0 && history.videoDuration - history.lastPlayPosition < 10_000) {
+                } else if (uiState == null && history.videoDuration > 0 && history.videoDuration - history.lastPlayPosition < 10_000) {
                     Toast.makeText(context, "上次已播放完,将从头开始播放", Toast.LENGTH_SHORT).show()
                 }
-                player.play()
             }
         }
     }
@@ -491,6 +500,7 @@ private fun PhonePlaybackTopControls(
         IconButton(onClick = onReplay) {
             Icon(Icons.Default.Replay, contentDescription = "replay", tint = Color.White)
         }
+        OperationModeButton(tint = Color.White)
         IconButton(onClick = onNext, enabled = hasNext) {
             Icon(
                 Icons.Default.SkipNext,
