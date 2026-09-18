@@ -62,11 +62,11 @@ object HttpUtil {
 
 
     @Volatile
-    lateinit var okHttpClient: OkHttpClient
+    var okHttpClient: OkHttpClient
         private set
 
     init {
-        buildOkhttpClientWithProxySetting(
+        okHttpClient = buildOkhttpClientWithProxySetting(
             NetworkProxySettings.loadFromSharedPreference(
                 SettingsViewModel.getSettingSharedPreference()
             )
@@ -357,13 +357,15 @@ object HttpUtil {
         }
     }
 
+    @Synchronized
     fun resetOkhttpClientWithProxySettings(proxySettings: NetworkProxySettings) {
-        okHttpClient.dispatcher.executorService.shutdown()
-        okHttpClient.connectionPool.evictAll()
-        buildOkhttpClientWithProxySetting(proxySettings = proxySettings)
+        val previousClient = okHttpClient
+        okHttpClient = buildOkhttpClientWithProxySetting(proxySettings = proxySettings)
+        // Calls created before the switch may still be enqueued on the previous dispatcher.
+        previousClient.connectionPool.evictAll()
     }
 
-    private fun buildOkhttpClientWithProxySetting(proxySettings: NetworkProxySettings) {
+    private fun buildOkhttpClientWithProxySetting(proxySettings: NetworkProxySettings): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .readTimeout(10, TimeUnit.SECONDS)
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -397,11 +399,11 @@ object HttpUtil {
             builder.proxy(
                 Proxy(
                     Proxy.Type.HTTP,
-                    InetSocketAddress(proxySettings.proxyHost, proxySettings.proxyPort)
+                    InetSocketAddress.createUnresolved(proxySettings.proxyHost, proxySettings.proxyPort)
                 )
             )
         }
-        okHttpClient = builder.build()
+        return builder.build()
     }
 
     fun resolveVideoUrl(pathOrUrl: String): Uri = Uri.parse(VideoSourceAuth.resolveVideoUrl(pathOrUrl))

@@ -14,6 +14,7 @@
 ## 功能
 
 - Android TV / Leanback Launcher 支持，同时兼容触屏 Android 设备。
+- [TV 遥控模式与手机触屏模式实时切换](docs/OPERATION_MODES.md)，支持播放中切换并记住选择。
 - 首页分页浏览、详情页、搜索和搜索历史。
 - Media3 / ExoPlayer 播放，支持 HLS、字幕下载、播放进度恢复和剧集切换。
 - 本地播放历史和搜索历史存储。

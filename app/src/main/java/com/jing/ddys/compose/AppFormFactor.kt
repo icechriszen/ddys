@@ -2,11 +2,20 @@ package com.jing.ddys.compose
 
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
+import com.jing.ddys.DdysApplication
 
 enum class AppFormFactor {
     Tv,
     Phone
+}
+
+fun AppFormFactor.opposite(): AppFormFactor = if (this == AppFormFactor.Tv) {
+    AppFormFactor.Phone
+} else {
+    AppFormFactor.Tv
 }
 
 fun appFormFactorFromUiMode(uiMode: Int): AppFormFactor {
@@ -21,5 +30,6 @@ fun appFormFactorFromUiMode(uiMode: Int): AppFormFactor {
 @Composable
 fun rememberAppFormFactor(): AppFormFactor {
     val configuration = LocalConfiguration.current
-    return appFormFactorFromUiMode(configuration.uiMode)
+    val modeOverride by DdysApplication.context.operationModeSettings.modeOverride.collectAsState()
+    return modeOverride ?: appFormFactorFromUiMode(configuration.uiMode)
 }

@@ -17,9 +17,8 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.net.InetSocketAddress
 import java.net.Proxy
 
-@UnstableApi
-internal fun createPlaybackDataSourceFactory(context: Context): DefaultDataSource.Factory {
-    val okHttpClient = OkHttpClient.Builder()
+internal fun createPlaybackHttpClient(): OkHttpClient {
+    return OkHttpClient.Builder()
         .apply {
             if (BuildConfig.DEBUG) {
                 addNetworkInterceptor(HttpLoggingInterceptor().apply {
@@ -32,7 +31,7 @@ internal fun createPlaybackDataSourceFactory(context: Context): DefaultDataSourc
                 proxy(
                     Proxy(
                         Proxy.Type.HTTP,
-                        InetSocketAddress(
+                        InetSocketAddress.createUnresolved(
                             networkProxySettings.proxyHost,
                             networkProxySettings.proxyPort
                         )
@@ -41,7 +40,11 @@ internal fun createPlaybackDataSourceFactory(context: Context): DefaultDataSourc
             }
         }
         .build()
+}
 
+@UnstableApi
+internal fun createPlaybackDataSourceFactory(context: Context): DefaultDataSource.Factory {
+    val okHttpClient = createPlaybackHttpClient()
     return DefaultDataSource.Factory(
         context,
         OkHttpDataSource.Factory { request ->

@@ -30,7 +30,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -39,12 +38,12 @@ import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.leanback.LeanbackPlayerAdapter
-import com.google.common.net.HttpHeaders
 import com.jing.bilibilitv.playback.GlueActionCallback
 import com.jing.bilibilitv.playback.PlayListAction
 import com.jing.bilibilitv.playback.ReplayAction
 import com.jing.bilibilitv.playback.WatchTogetherAction
-import com.jing.ddys.BuildConfig
+import com.jing.bilibilitv.playback.OperationModeAction
+import com.jing.ddys.DdysApplication
 import com.jing.ddys.R
 import com.jing.ddys.databinding.PlayerProgressBarLayoutBinding
 import com.jing.ddys.ext.secondsToDuration
@@ -53,9 +52,6 @@ import com.jing.ddys.ext.showShortToast
 import com.jing.ddys.repository.HttpUtil
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
-import com.jing.ddys.repository.VideoSourceAuth
-import com.jing.ddys.setting.NetworkProxySettings
-import com.jing.ddys.setting.SettingsViewModel
 import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 import com.jing.ddys.watchtogether.WatchTogetherRole
 import com.jing.ddys.watchtogether.WatchTogetherSession
@@ -65,12 +61,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.androidx.viewmodel.ext.android.getActivityViewModel
 import org.koin.core.parameter.parametersOf
-import java.net.InetSocketAddress
-import java.net.Proxy
 
 
 @UnstableApi
@@ -100,6 +92,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
     private var watchTogetherSyncJob: Job? = null
     private var applyingRemoteWatchTogetherState = false
+    private var loadedEpisodeIndex: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -156,15 +149,22 @@ class VideoPlaybackFragment : VideoSupportFragment() {
         }
 
         lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 viewModel.videoUrl.collectLatest {
                     when (it) {
                         is Resource.Success -> {
                             mProgressBarManager.hide()
                             val history = it.data
+                            if (history.episodeIndex != viewModel.videoIndex.value) return@collectLatest
                             val (_, url, _, subtitleUrl) = history.url
                             Log.d(TAG, "video url: $url")
                             exoplayer?.apply {
+                                val uiState = viewModel.consumePlaybackUiState(history.episodeIndex)
+                                loadedEpisodeIndex = history.episodeIndex
+                                viewModel.currentPlayPosition = playbackStartPosition(
+                                    uiState, history.lastPlayPosition, history.videoDuration
+                                )
+                                viewModel.videoDuration = history.videoDuration.coerceAtLeast(0)
                                 val videoMediaSource = mediaSourceFactory.createMediaSource(
                                     MediaItem.Builder().setUri(url).build()
                                 )
@@ -188,21 +188,16 @@ class VideoPlaybackFragment : VideoSupportFragment() {
                                 } else {
                                     exoplayer!!.setMediaSource(videoMediaSource)
                                 }
+                                restorePlaybackUiState(uiState, history)
                                 prepare()
-                                if (viewModel.resumePosition > 0) {
-                                    seekTo(viewModel.resumePosition)
-                                    viewModel.resumePosition = 0
-                                } else if (history.lastPlayPosition > 0) {
+                                if (uiState == null && history.lastPlayPosition > 0) {
                                     // 距离结束小于10秒,当作播放结束
                                     if (history.videoDuration > 0 && history.videoDuration - history.lastPlayPosition < 10_000) {
                                         requireContext().showShortToast("上次已播放完,将从头开始播放")
                                     } else {
-                                        val seekTo = history.lastPlayPosition
-                                        exoplayer?.seekTo(seekTo)
-                                        requireContext().showShortToast("已定位到上次播放位置:${(seekTo / 1000).secondsToDuration()}")
+                                        requireContext().showShortToast("已定位到上次播放位置:${(history.lastPlayPosition / 1000).secondsToDuration()}")
                                     }
                                 }
-                                play()
                             }
                         }
 
@@ -261,9 +256,9 @@ class VideoPlaybackFragment : VideoSupportFragment() {
     }
 
     override fun onPause() {
+        exoplayer?.let { viewModel.capturePlaybackUiState(it, loadedEpisodeIndex) }
         super.onPause()
         if (Build.VERSION.SDK_INT <= 23) {
-            viewModel.resumePosition = exoplayer!!.currentPosition
             destroyPlayer()
             _updateSpeedJob?.cancel()
             _updateSpeedJob = null
@@ -274,36 +269,12 @@ class VideoPlaybackFragment : VideoSupportFragment() {
     override fun onStop() {
         super.onStop()
         if (Build.VERSION.SDK_INT > 23) {
-            viewModel.resumePosition = exoplayer!!.currentPosition
             destroyPlayer()
             _updateSpeedJob?.cancel()
             _updateSpeedJob = null
             progressBarBinding.root.removeVisibilityListener()
         }
     }
-
-    private val okHttpClient = OkHttpClient.Builder()
-        .apply {
-            if (BuildConfig.DEBUG) {
-                addNetworkInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.HEADERS
-                })
-            }
-            val networkProxySettings =
-                NetworkProxySettings.loadFromSharedPreference(SettingsViewModel.getSettingSharedPreference())
-            if (networkProxySettings.proxyEnabled && networkProxySettings.proxyHost.isNotEmpty()) {
-                proxy(
-                    Proxy(
-                        Proxy.Type.HTTP,
-                        InetSocketAddress(
-                            networkProxySettings.proxyHost,
-                            networkProxySettings.proxyPort
-                        )
-                    )
-                )
-            }
-        }
-        .build()
 
     private val dataSourceFactory by lazy {
         createPlaybackDataSourceFactory(requireContext())
@@ -329,10 +300,10 @@ class VideoPlaybackFragment : VideoSupportFragment() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) {
+            if (isPlaying && loadedEpisodeIndex == viewModel.videoIndex.value) {
                 viewModel.startSaveHistory()
             } else {
-                viewModel.saveHistory()
+                if (loadedEpisodeIndex == viewModel.videoIndex.value) viewModel.saveHistory()
                 viewModel.stopSaveHistory()
             }
         }
@@ -349,6 +320,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
 
     private fun buildPlayer() {
+        loadedEpisodeIndex = null
         exoplayer = ExoPlayer.Builder(requireContext())
             .setBandwidthMeter(trafficSpeedCalculator)
             .setLoadControl(createPlaybackLoadControl())
@@ -365,6 +337,8 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
 
     private fun destroyPlayer() {
+        glue?.host = null
+        glue = null
         exoplayer?.let {
             it.removeListener(playerListener)
             // Pause the player to notify listeners before it is released.
@@ -372,6 +346,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             it.release()
             exoplayer = null
         }
+        viewModel.stopSaveHistory()
     }
 
     private fun prepareGlue(localExoplayer: ExoPlayer) {
@@ -384,9 +359,15 @@ class VideoPlaybackFragment : VideoSupportFragment() {
                 it.add(ReplayAction(requireContext()))
                 it.add(WatchTogetherAction(requireContext()))
             },
+            // Leanback shows at most seven primary controls; keep this entry visible separately.
+            onCreateSecondaryAction = {
+                it.add(OperationModeAction(requireContext()))
+            },
             updateProgress = {
-                viewModel.currentPlayPosition = localExoplayer.currentPosition
-                viewModel.videoDuration = localExoplayer.duration
+                if (loadedEpisodeIndex == viewModel.videoIndex.value) {
+                    viewModel.currentPlayPosition = localExoplayer.currentPosition
+                    viewModel.videoDuration = localExoplayer.duration.coerceAtLeast(0)
+                }
             }).apply {
             host = VideoSupportFragmentGlueHost(this@VideoPlaybackFragment)
             title = videoDetail.title
@@ -398,6 +379,13 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             addActionCallback(replayActionCallback)
             addActionCallback(changePlayVideoActionCallback)
             addActionCallback(watchTogetherActionCallback)
+            addActionCallback(object : GlueActionCallback {
+                override fun support(action: Action) = action is OperationModeAction
+
+                override fun onAction(action: Action) {
+                    DdysApplication.context.operationModeSettings.toggle(resources.configuration.uiMode)
+                }
+            })
             addActionCallback(object : GlueActionCallback {
                 override fun support(action: Action): Boolean {
                     return action is SkipNextAction
@@ -537,12 +525,20 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             return
         }
         watchTogetherSyncJob = viewLifecycleOwner.lifecycleScope.launch {
-            while (isActive) {
-                when (session.role) {
-                    WatchTogetherRole.Host -> publishWatchTogetherHostState()
-                    WatchTogetherRole.Member -> applyWatchTogetherMemberState(session.roomCode)
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (isActive) {
+                    if (loadedEpisodeIndex != viewModel.videoIndex.value ||
+                        (activity as? VideoPlaybackActivity)?.isSwitchingOperationMode == true
+                    ) {
+                        delay(1000L)
+                        continue
+                    }
+                    when (session.role) {
+                        WatchTogetherRole.Host -> publishWatchTogetherHostState()
+                        WatchTogetherRole.Member -> applyWatchTogetherMemberState(session.roomCode)
+                    }
+                    delay(1000L)
                 }
-                delay(1000L)
             }
         }
     }
@@ -558,7 +554,7 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             positionMs = player.currentPosition,
             durationMs = player.duration.coerceAtLeast(0L),
             playbackRate = player.playbackParameters.speed,
-            paused = !player.isPlaying
+            paused = !player.playWhenReady
         )
     }
 
@@ -577,9 +573,9 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
                 player.seekTo(targetPosition)
             }
-            if (state.paused && player.isPlaying) {
+            if (state.paused && player.playWhenReady) {
                 player.pause()
-            } else if (!state.paused && !player.isPlaying) {
+            } else if (!state.paused && !player.playWhenReady) {
                 player.play()
             }
         } finally {

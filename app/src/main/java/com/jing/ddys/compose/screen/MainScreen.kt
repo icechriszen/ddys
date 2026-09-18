@@ -5,6 +5,8 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -59,6 +62,7 @@ import com.jing.ddys.compose.common.CustomTabRow
 import com.jing.ddys.compose.common.ErrorTip
 import com.jing.ddys.compose.common.FocusGroup
 import com.jing.ddys.compose.common.Loading
+import com.jing.ddys.compose.common.OperationModeButton
 import com.jing.ddys.compose.common.VideoCard
 import com.jing.ddys.compose.common.appendEnd
 import com.jing.ddys.detail.DetailActivity
@@ -94,14 +98,25 @@ internal val categoryList = listOf(
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(selectedTabIndex) {
+        delay(200L)
+        viewModel.onCategoryChoose(categoryList[selectedTabIndex].first)
+    }
+    LaunchedEffect(Unit) {
+        delay(3000L)
+        updateViewModel.checkDaily()
+    }
     if (rememberAppFormFactor() == AppFormFactor.Phone) {
-        PhoneMainScreen(viewModel = viewModel, updateViewModel = updateViewModel)
+        PhoneMainScreen(
+            viewModel = viewModel,
+            updateViewModel = updateViewModel,
+            selectedTabIndex = selectedTabIndex,
+            onSelectCategory = { selectedTabIndex = it }
+        )
         return
     }
 
-    var selectedTabIndex by remember {
-        mutableIntStateOf(0)
-    }
     val updateState by updateViewModel.updateState.collectAsState()
     val tabNames = remember {
         categoryList.map { it.second }.toList()
@@ -111,15 +126,6 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
     }
 
     val context = LocalContext.current
-    LaunchedEffect(selectedTabIndex) {
-        val url = categoryList[selectedTabIndex].first
-        delay(200L)
-        viewModel.onCategoryChoose(url)
-    }
-    LaunchedEffect(Unit) {
-        delay(3000L)
-        updateViewModel.checkDaily()
-    }
 
     var showAppNameRow by remember {
         mutableStateOf(true)
@@ -166,7 +172,10 @@ fun TopNav(
                         modifier = Modifier.fillMaxWidth()
                     ) {
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())
+                        ) {
                             IconButton(
                                 onClick = {
                                     SearchActivity.navigateTo(context = context)
@@ -209,10 +218,10 @@ fun TopNav(
                                     )
                                 }
                             }
+                            OperationModeButton(modifier = Modifier.restorableFocus())
                             IconButton(
-                                onClick = {
-                                    SettingsActivity.navigateTo(context)
-                                }, modifier = Modifier.restorableFocus()
+                                onClick = { SettingsActivity.navigateTo(context) },
+                                modifier = Modifier.restorableFocus()
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Settings,

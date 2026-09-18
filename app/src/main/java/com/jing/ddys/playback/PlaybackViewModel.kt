@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import com.jing.ddys.DdysApplication
 import com.jing.ddys.repository.HttpUtil
 import com.jing.ddys.repository.Resource
@@ -47,7 +48,33 @@ class PlaybackViewModel(
 
     private var requestVideoUrlJob: Job? = null
 
-    var resumePosition = 0L
+    private var pendingUiState: PlaybackUiState? = null
+
+    fun capturePlaybackUiState(player: Player, loadedEpisodeIndex: Int?) {
+        val episodeIndex = _videoIndex.value
+        val hasCurrentMedia = loadedEpisodeIndex == episodeIndex && player.mediaItemCount > 0
+        // A second lifecycle callback must not erase a restore waiting for its media to load.
+        if (!hasCurrentMedia && pendingUiState?.episodeIndex == episodeIndex) return
+        pendingUiState = PlaybackUiState(
+            episodeIndex = episodeIndex,
+            positionMs = if (hasCurrentMedia) player.currentPosition.coerceAtLeast(0) else null,
+            playWhenReady = player.playWhenReady,
+            speed = player.playbackParameters.speed,
+            pitch = player.playbackParameters.pitch,
+            trackSelectionParameters = player.trackSelectionParameters
+        )
+        if (hasCurrentMedia) {
+            currentPlayPosition = player.currentPosition.coerceAtLeast(0)
+            videoDuration = player.duration.coerceAtLeast(0)
+            saveHistory()
+        }
+    }
+
+    fun consumePlaybackUiState(episodeIndex: Int): PlaybackUiState? {
+        val state = pendingUiState?.takeIf { it.episodeIndex == episodeIndex }
+        pendingUiState = null
+        return state
+    }
 
     var currentPlayPosition: Long = 0L
 
@@ -126,6 +153,7 @@ class PlaybackViewModel(
                 _videoUrl.emit(
                     Resource.Success(
                         VideoUrlWithHistory(
+                            episodeIndex = videoIndex,
                             url = url,
                             lastPlayPosition = history?.progress ?: 0L,
                             videoDuration = history?.duration ?: 0L
@@ -208,6 +236,7 @@ class PlaybackViewModel(
 
 
 data class VideoUrlWithHistory(
+    val episodeIndex: Int,
     val url: VideoUrl,
     val lastPlayPosition: Long,
     val videoDuration: Long

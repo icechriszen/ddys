@@ -17,6 +17,7 @@ import com.jing.ddys.room.Dy555Database
 import com.jing.ddys.search.SearchResultViewModel
 import com.jing.ddys.search.SearchViewModel
 import com.jing.ddys.setting.SettingsViewModel
+import com.jing.ddys.setting.OperationModeSettings
 import com.jing.ddys.update.ApkDownloader
 import com.jing.ddys.update.ApkInstallLauncher
 import com.jing.ddys.update.UpdateManager
@@ -24,6 +25,7 @@ import com.jing.ddys.update.UpdateRepository
 import com.jing.ddys.update.UpdateViewModel
 import com.jing.ddys.watchtogether.WatchTogetherClient
 import com.jing.ddys.watchtogether.WatchTogetherViewModel
+import okhttp3.Call
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -33,6 +35,10 @@ import org.koin.dsl.module
 import java.util.concurrent.Executors
 
 class DdysApplication : Application(), ImageLoaderFactory {
+
+    val operationModeSettings by lazy {
+        OperationModeSettings(getSharedPreferences("settings", MODE_PRIVATE))
+    }
 
     private val TAG = DdysApplication::class.java.simpleName
 
@@ -53,7 +59,9 @@ class DdysApplication : Application(), ImageLoaderFactory {
             private set
 
         val imageLoader by lazy {
-            ImageLoader.Builder(context).okHttpClient(HttpUtil.okHttpClient).build()
+            ImageLoader.Builder(context)
+                .callFactory(Call.Factory { request -> HttpUtil.okHttpClient.newCall(request) })
+                .build()
         }
     }
 

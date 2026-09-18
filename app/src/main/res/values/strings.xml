@@ -14,6 +14,14 @@
     <string name="playback_history">播放历史</string>
     <string name="click_ok_del_tip">长按【ok】删除</string>
     <string name="settings_title">设置</string>
+    <string name="operation_mode_title">操作模式</string>
+    <string name="operation_mode_tv">TV 遥控模式</string>
+    <string name="operation_mode_phone">手机触屏模式</string>
+    <string name="operation_mode_switch_to_phone">切换到手机触屏模式</string>
+    <string name="operation_mode_switch_to_tv">切换到 TV 遥控模式</string>
+    <string name="operation_mode_setting_description">当前：%1$s；点击%2$s</string>
+    <string name="more_actions">更多操作</string>
+    <string name="watch_together_title">一起看</string>
     <string name="video_source_login_title">网站登录</string>
     <string name="video_source_login_ready">已保存网站登录状态，点击重新登录</string>
     <string name="video_source_login_required">未登录，点击打开网站登录页</string>
