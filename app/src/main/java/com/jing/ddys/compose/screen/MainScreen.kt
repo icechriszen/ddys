@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Groups
@@ -23,8 +24,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +51,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.tv.foundation.ExperimentalTvFoundationApi
 import androidx.tv.foundation.lazy.grid.TvGridCells
+import androidx.tv.foundation.lazy.grid.TvGridItemSpan
 import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
 import androidx.tv.foundation.lazy.grid.rememberTvLazyGridState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -98,7 +102,12 @@ internal val categoryList = listOf(
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val filterState by viewModel.state.collectAsState()
+    val filterFocusRequester = remember { FocusRequester() }
+    HomeFilterPanelHost(viewModel, filterFocusRequester)
+    var selectedTabIndex by remember { mutableIntStateOf(
+        categoryList.indexOfFirst { it.first == filterState.query.category }.coerceAtLeast(0)
+    ) }
     LaunchedEffect(selectedTabIndex) {
         delay(200L)
         viewModel.onCategoryChoose(categoryList[selectedTabIndex].first)
@@ -111,6 +120,7 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
         PhoneMainScreen(
             viewModel = viewModel,
             updateViewModel = updateViewModel,
+            filterFocusRequester = filterFocusRequester,
             selectedTabIndex = selectedTabIndex,
             onSelectCategory = { selectedTabIndex = it }
         )
@@ -139,14 +149,19 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
             showUpdateButton = updateState.hasVisibleUpdate(),
             onTabFocus = { selectedTabIndex = it })
         Spacer(modifier = Modifier.height(5.dp))
-        VideoGrid(viewModel = viewModel,
-            onVideoClick = { DetailActivity.navigateTo(context, it.url) },
-            onScrollStateChanged = { showAppNameRow = !it }) {
-            navFocusRequester.requestFocus()
+        HomeFilterBar(viewModel, filterFocusRequester)
+        key(filterState.generation) {
+            VideoGrid(
+                viewModel = viewModel,
+                onVideoClick = { DetailActivity.navigateTo(context, it.url) },
+                onScrollStateChanged = { showAppNameRow = !it }
+            ) {
+                navFocusRequester.requestFocus()
+            }
         }
     }
     LaunchedEffect(Unit) {
-        navFocusRequester.requestFocus()
+        if (viewModel.focusedVideoUrl == null && filterState.draft == null) navFocusRequester.requestFocus()
     }
 
 }
@@ -244,6 +259,7 @@ fun TopNav(
 
             CustomTabRow(
                 selectedTabIndex = selectedTabIndex,
+                initialFocusedIndex = selectedTabIndex,
                 tabs = tabs,
                 modifier = modifier.initiallyFocused(),
                 onTabFocus = onTabFocus
@@ -274,6 +290,7 @@ fun VideoGrid(
     onRequestTabFocus: () -> Unit = {}
 ) {
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
+    val filterState by viewModel.state.collectAsState()
     val context = LocalContext.current
     val sourceLoginLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -289,7 +306,7 @@ fun VideoGrid(
         val error = (pagingItems.loadState.refresh as LoadState.Error).error
         val authRequired = error is SourceAuthRequiredException
         ErrorTip(
-            message = "加载失败:${error.message}",
+            message = if (filterState.query.filters.isActive) discoverErrorMessage(error) else "加载失败:${error.message}",
             primaryActionText = if (authRequired) stringResource(R.string.video_source_login_title) else null,
             primaryAction = if (authRequired) {
                 {
@@ -311,7 +328,25 @@ fun VideoGrid(
     val videoCardContainerWidth = cardWidth * 1.1f
     val videoCardContainerHeight = cardHeight * 1.1f
 
-    val gridState = rememberTvLazyGridState()
+    val gridState = rememberTvLazyGridState(viewModel.tvGridIndex, viewModel.tvGridOffset)
+    val restoreUrl = remember { viewModel.focusedVideoUrl }
+    val restoreFocus = remember { FocusRequester() }
+    var focusRestored by remember { mutableStateOf(false) }
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) -> viewModel.tvGridIndex = index; viewModel.tvGridOffset = offset }
+    }
+    LaunchedEffect(pagingItems.itemCount, filterState.draft) {
+        if (!focusRestored && restoreUrl != null && filterState.draft == null) {
+            val index = pagingItems.itemSnapshotList.items.indexOfFirst { it.url == restoreUrl }
+            if (index >= 0) {
+                gridState.scrollToItem(index)
+                androidx.compose.runtime.withFrameNanos { }
+                restoreFocus.requestFocus()
+                focusRestored = true
+            }
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
     val notScrolled by remember {
         derivedStateOf {
@@ -323,18 +358,26 @@ fun VideoGrid(
         onScrollStateChanged(!notScrolled)
     }
 
+    if (pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading && filterState.query.filters.isActive) {
+        DiscoverEmptyState(viewModel)
+        return
+    }
+
     TvLazyVerticalGrid(
         columns = TvGridCells.Adaptive(videoCardContainerWidth),
         state = gridState,
         content = {
             items(count = pagingItems.itemCount, key = pagingItems.itemKey { it.url }) {
+                val video = pagingItems[it] ?: return@items
                 Box(
                     modifier = Modifier.size(videoCardContainerWidth, videoCardContainerHeight),
                     contentAlignment = Alignment.Center
                 ) {
                     VideoCard(width = cardWidth,
                         height = cardHeight,
-                        video = pagingItems[it]!!,
+                        video = video,
+                        modifier = (if (video.url == restoreUrl) Modifier.focusRequester(restoreFocus) else Modifier)
+                            .onFocusChanged { focus -> if (focus.isFocused || focus.hasFocus) viewModel.focusedVideoUrl = video.url },
                         onVideoClick = onVideoClick,
                         onVideoKeyEvent = { _, event ->
                             when (event.key) {
@@ -362,6 +405,20 @@ fun VideoGrid(
             }
 
             appendEnd(pagingItems.loadState.append, pagingItems.itemCount > 0)
+            if (pagingItems.loadState.append is LoadState.Error) {
+                item(span = { TvGridItemSpan(maxLineSpan) }) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val error = (pagingItems.loadState.append as LoadState.Error).error
+                        Text(discoverErrorMessage(error))
+                        if (error is SourceAuthRequiredException) {
+                            FilterAction(stringResource(R.string.video_source_login_title), {
+                                sourceLoginLauncher.launch(Intent(context, VideoSourceLoginActivity::class.java))
+                            })
+                        }
+                        FilterAction(stringResource(R.string.button_retry), { pagingItems.retry() })
+                    }
+                }
+            }
 
         })
 }
