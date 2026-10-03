@@ -95,6 +95,8 @@ object HttpUtil {
         )
     }
 
+    fun fetchDiscoverHtml(url: String): String = getHtml(url)
+
     private fun getHtml(url: String): String {
         val req = Request.Builder().url(url).get().build()
         return okHttpClient.newCall(req).execute().use {

@@ -12,6 +12,7 @@ import com.jing.ddys.history.PlayHistoryViewModel
 import com.jing.ddys.main.MainViewModel
 import com.jing.ddys.playback.PlaybackViewModel
 import com.jing.ddys.repository.HomeRepository
+import com.jing.ddys.repository.DiscoverRepository
 import com.jing.ddys.repository.HttpUtil
 import com.jing.ddys.room.Dy555Database
 import com.jing.ddys.search.SearchResultViewModel
@@ -114,6 +115,7 @@ class DdysApplication : Application(), ImageLoaderFactory {
         }
 
         single { HomeRepository(get()) }
+        single { DiscoverRepository() }
         single { UpdateRepository() }
         single { ApkDownloader(this@DdysApplication) }
         single { ApkInstallLauncher() }

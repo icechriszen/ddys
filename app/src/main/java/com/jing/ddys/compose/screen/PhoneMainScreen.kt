@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -29,12 +31,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -60,6 +66,7 @@ import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 fun PhoneMainScreen(
     viewModel: MainViewModel,
     updateViewModel: UpdateViewModel,
+    filterFocusRequester: FocusRequester,
     selectedTabIndex: Int,
     onSelectCategory: (Int) -> Unit
 ) {
@@ -110,13 +117,16 @@ fun PhoneMainScreen(
                 )
             }
         }
-        PhoneVideoGrid(viewModel = viewModel)
+        HomeFilterBar(viewModel, filterFocusRequester)
+        val filterState by viewModel.state.collectAsState()
+        key(filterState.generation) { PhoneVideoGrid(viewModel = viewModel) }
     }
 }
 
 @Composable
 private fun PhoneVideoGrid(viewModel: MainViewModel) {
     val pagingItems = viewModel.pager.collectAsLazyPagingItems()
+    val filterState by viewModel.state.collectAsState()
     val context = LocalContext.current
     val sourceLoginLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -133,7 +143,7 @@ private fun PhoneVideoGrid(viewModel: MainViewModel) {
         val error = (pagingItems.loadState.refresh as LoadState.Error).error
         val authRequired = error is SourceAuthRequiredException
         ErrorTip(
-            message = "加载失败:${error.message}",
+            message = if (filterState.query.filters.isActive) discoverErrorMessage(error) else "加载失败:${error.message}",
             primaryActionText = if (authRequired) stringResource(R.string.video_source_login_title) else null,
             primaryAction = if (authRequired) {
                 {
@@ -150,8 +160,18 @@ private fun PhoneVideoGrid(viewModel: MainViewModel) {
         return
     }
 
+    val gridState = rememberLazyGridState(viewModel.phoneGridIndex, viewModel.phoneGridOffset)
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) -> viewModel.phoneGridIndex = index; viewModel.phoneGridOffset = offset }
+    }
+    if (pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading && filterState.query.filters.isActive) {
+        DiscoverEmptyState(viewModel)
+        return
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Adaptive(132.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -173,6 +193,20 @@ private fun PhoneVideoGrid(viewModel: MainViewModel) {
                 item {
                     Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
+                    }
+                }
+            }
+            if (pagingItems.loadState.append is LoadState.Error) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.padding(16.dp)) {
+                        val error = (pagingItems.loadState.append as LoadState.Error).error
+                        Text(discoverErrorMessage(error))
+                        if (error is SourceAuthRequiredException) {
+                            FilterAction(stringResource(R.string.video_source_login_title), {
+                                sourceLoginLauncher.launch(Intent(context, VideoSourceLoginActivity::class.java))
+                            })
+                        }
+                        FilterAction(stringResource(R.string.button_retry), { pagingItems.retry() })
                     }
                 }
             }
