@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -81,6 +82,7 @@ fun PhoneMainScreen(
                 IconButton(onClick = { SearchActivity.navigateTo(context) }) {
                     Icon(Icons.Default.Search, contentDescription = "search")
                 }
+                HomeFilterButton(viewModel, Modifier.focusRequester(filterFocusRequester))
                 OperationModeButton()
                 IconButton(onClick = { SettingsActivity.navigateTo(context) }) {
                     Icon(Icons.Default.Settings, contentDescription = "settings")
@@ -117,7 +119,7 @@ fun PhoneMainScreen(
                 )
             }
         }
-        HomeFilterBar(viewModel, filterFocusRequester)
+        HomeFilterSummary(viewModel)
         val filterState by viewModel.state.collectAsState()
         key(filterState.generation) { PhoneVideoGrid(viewModel = viewModel) }
     }
