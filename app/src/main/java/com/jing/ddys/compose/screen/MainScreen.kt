@@ -140,6 +140,9 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
     var showAppNameRow by remember {
         mutableStateOf(true)
     }
+    LaunchedEffect(filterState.draft != null) {
+        if (filterState.draft != null) showAppNameRow = true
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopNav(Modifier.focusRequester(navFocusRequester),
@@ -147,9 +150,10 @@ fun MainScreen(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
             selectedTabIndex = selectedTabIndex,
             showAppNameRow = showAppNameRow,
             showUpdateButton = updateState.hasVisibleUpdate(),
+            filterAction = { HomeFilterButton(viewModel, Modifier.focusRequester(filterFocusRequester)) },
             onTabFocus = { selectedTabIndex = it })
         Spacer(modifier = Modifier.height(5.dp))
-        HomeFilterBar(viewModel, filterFocusRequester)
+        HomeFilterSummary(viewModel)
         key(filterState.generation) {
             VideoGrid(
                 viewModel = viewModel,
@@ -174,6 +178,7 @@ fun TopNav(
     selectedTabIndex: Int,
     showAppNameRow: Boolean = true,
     showUpdateButton: Boolean = false,
+    filterAction: @Composable () -> Unit = {},
     onTabFocus: (Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -201,6 +206,7 @@ fun TopNav(
                                     contentDescription = "search"
                                 )
                             }
+                            filterAction()
                             IconButton(
                                 onClick = {
                                     PlayHistoryActivity.navigateTo(context)
