@@ -4,17 +4,17 @@
 
 ## 版本号
 
-发布前在 `app/build.gradle.kts` 中更新：
+发布前在 `app/build.gradle.kts` 中递增 `versionCode`，并设置新的 `versionName`。以已发布的 v1.5.1 为例：
 
 ```kotlin
-versionCode = 13
-versionName = "1.2.9"
+versionCode = 26
+versionName = "1.5.1"
 ```
 
 建议 tag 使用和 `versionName` 对齐的格式：
 
 ```text
-v1.2.9
+v1.5.1
 ```
 
 ## GitHub Secrets
@@ -54,19 +54,21 @@ git diff --check
 3. 创建并推送 tag：
 
 ```bash
-git tag v1.2.9
-git push origin v1.2.9
+version_name=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts)
+test -n "$version_name" && git tag "v$version_name" && git push origin "refs/tags/v$version_name"
 ```
 
 4. 等待 GitHub Actions 完成 release workflow。
 5. 检查 Release 页面中是否生成：
 
 ```text
-ddys-v1.2.9.apk
-ddys-v1.2.9.apk.sha256
+ddys-<tag>.apk
+ddys-<tag>.apk.sha256
+update.json
 ```
 
-6. 在已安装旧版本的设备上打开设置页，确认应用内更新可以发现并下载安装新版本。
+6. 核对 `update.json` 中的 tag、APK 下载地址、文件大小和 SHA-256 摘要与发布资产一致。
+7. 在已安装旧版本的设备上打开设置页，确认应用内更新可以发现并下载安装新版本。
 
 ## 回滚
 

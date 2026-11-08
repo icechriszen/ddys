@@ -6,13 +6,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. Do not include account cookies, private sources, signing keys, or copyrighted resource links.
+        Thanks for reporting a bug. Do not include passwords, cookies, tokens, private sources, signing keys, or copyrighted resource links.
   - type: input
     id: app-version
     attributes:
       label: App version
       description: Release version, APK name, or commit SHA.
-      placeholder: "v1.2.9 / ddys-v1.2.9.apk / commit SHA"
+      placeholder: "v1.5.1 / ddys-v1.5.1.apk / commit SHA"
     validations:
       required: true
   - type: input
@@ -57,6 +57,16 @@ body:
         3. Observe ...
     validations:
       required: true
+  - type: textarea
+    id: login-details
+    attributes:
+      label: Website login details (if applicable)
+      description: |
+        Include the Android System WebView version and whether you opened the page in an external browser or via DDYS Settings → Website login.
+        What happened after verification? Did DDYS return to Settings and show a saved login? What happened when you retried the original action?
+        Attach a redacted screenshot or copy the exact error text.
+    validations:
+      required: false
   - type: textarea
     id: expected
     attributes:

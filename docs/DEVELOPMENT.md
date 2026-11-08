@@ -76,6 +76,12 @@ app/src/main/java/com/jing/ddys/
 - 播放问题请记录视频源类型、字幕状态、清晰度、失败时间点和 logcat。
 - 更新问题请确认 GitHub Release 中存在 `ddys-<tag>.apk` 资产，并检查设备是否允许安装未知来源应用。
 
+### 网站登录与验证
+
+`VideoSourceLoginActivity` 在应用内 WebView 加载登录页。离开登录页后，`VideoSourceAuth.saveAuthCookieFromWebView()` 从 `CookieManager` 读取站点 Cookie，写入应用的 SharedPreferences；保存成功才提示「网站登录成功」并关闭页面。后续站点请求由 `HttpUtil` 附加本地保存的认证 Cookie。
+
+复现时分别检查验证表单能否提交、设置页是否显示已保存、重试首页或详情请求后显示什么。记录设备与 WebView 版本及界面提示，勿记录认证值。v1.3.6 至 v1.3.9 的表单兼容修复见 [历史记录](../CHANGELOG.md)，用户复现步骤见[支持文档](../SUPPORT.md#网站登录)。
+
 ## 代码约定
 
 - 保持功能改动聚焦，避免混入无关格式化。
