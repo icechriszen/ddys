@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 (28)
+
+- 适配上游 Cap 验证，Android TV 支持手机扫码登录；保存验证浏览器会话及 User-Agent，并限制 Cookie 的发送范围。
+- 移除手机、TV 的“一起看”入口、房间同步及 Cloudflare 后端。
+- 保留播放、字幕、选集和历史，修正移除按钮后的播放器焦点。
+
 本项目采用按版本记录用户可见变化的方式维护 changelog。
 
 ## Unreleased

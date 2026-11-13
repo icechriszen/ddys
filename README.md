@@ -35,6 +35,10 @@
 
 完整版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 网站验证与功能调整
+
+Android 1.6.1 支持上游 Cap 验证，TV 可用手机扫码完成登录，详见 [网站验证说明](docs/ANDROID_LOGIN.md)。本版本移除了“一起看”及其同步后端，正常播放、字幕和历史记录保留。
+
 ## 安装
 
 ### 从 Release 安装

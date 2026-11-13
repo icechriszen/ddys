@@ -6,6 +6,19 @@ import org.junit.Test
 class VideoSourceLoginScriptsTest {
 
     @Test
+    fun capUsesOnlyConvenienceFillAndDoesNotRunLegacyPatches() {
+        val script = VideoSourceLoginScripts.buildEnhanceLoginFormScript("ddys")
+        val cap = script.substringAfter("if (document.querySelector('cap-widget'))").substringBefore("var formSelector")
+        assertTrue(cap.contains("return;"))
+        assertTrue(cap.contains("!input.value"))
+        assertTrue(!cap.contains("dispatchEvent"))
+        assertTrue(!cap.contains(".click()"))
+        assertTrue(!cap.contains(".solve("))
+        assertTrue(!cap.contains("disabled = false"))
+        assertTrue(VideoSourceLoginScripts.buildReadPageStateScript().contains("catalog:"))
+    }
+
+    @Test
     fun loginScriptUsesNativeSubmitFlow() {
         val script = VideoSourceLoginScripts.buildEnhanceLoginFormScript("ddys")
 

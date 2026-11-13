@@ -22,7 +22,7 @@ internal fun createPlaybackHttpClient(): OkHttpClient {
         .apply {
             if (BuildConfig.DEBUG) {
                 addNetworkInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.HEADERS
+                    level = HttpLoggingInterceptor.Level.BASIC
                 })
             }
             val networkProxySettings =
@@ -39,6 +39,11 @@ internal fun createPlaybackHttpClient(): OkHttpClient {
                 )
             }
         }
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val cookie = VideoSourceAuth.getAuthCookieHeader(request.url.toString())
+            chain.proceed(if (cookie.isBlank()) request else request.newBuilder().header("Cookie", cookie).build())
+        }
         .build()
 }
 
@@ -49,16 +54,8 @@ internal fun createPlaybackDataSourceFactory(context: Context): DefaultDataSourc
         context,
         OkHttpDataSource.Factory { request ->
             val newRequest = request.newBuilder()
-                .header(HttpHeaders.USER_AGENT, HttpUtil.USER_AGENT)
+                .header(HttpHeaders.USER_AGENT, HttpUtil.requestUserAgent)
                 .header(HttpHeaders.REFERER, HttpUtil.BASE_URL + '/')
-                .apply {
-                    if (request.url.host == VideoSourceAuth.sourceHost()) {
-                        val cookie = VideoSourceAuth.getAuthCookieHeader()
-                        if (cookie.isNotBlank()) {
-                            header("Cookie", cookie)
-                        }
-                    }
-                }
                 .build()
             okHttpClient.newCall(newRequest)
         }

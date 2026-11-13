@@ -11,25 +11,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -73,10 +65,6 @@ import com.jing.ddys.ext.secondsToDuration
 import com.jing.ddys.compose.common.OperationModeButton
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
-import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
-import com.jing.ddys.watchtogether.WatchTogetherRole
-import com.jing.ddys.watchtogether.WatchTogetherSession
-import com.jing.ddys.watchtogether.WatchTogetherViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -86,7 +74,6 @@ import kotlinx.coroutines.launch
 fun PhonePlaybackScreen(
     videoDetail: VideoDetailInfo,
     viewModel: PlaybackViewModel,
-    watchTogetherViewModel: WatchTogetherViewModel,
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
@@ -113,11 +100,8 @@ fun PhonePlaybackScreen(
     val videoUrlState by viewModel.videoUrl.collectAsState()
     val episodeName by viewModel.episodeName.collectAsState()
     val videoIndex by viewModel.videoIndex.collectAsState()
-    val watchTogetherSession by watchTogetherViewModel.session.collectAsState()
-    val watchTogetherError by watchTogetherViewModel.errorMessage.collectAsState()
     var controlsVisible by remember { mutableStateOf(true) }
     var showEpisodeDialog by remember { mutableStateOf(false) }
-    var showWatchTogetherDialog by remember { mutableStateOf(false) }
     var loadingText by remember { mutableStateOf("Loading") }
     var errorText by remember { mutableStateOf<String?>(null) }
     var speedText by remember { mutableStateOf("") }
@@ -178,54 +162,6 @@ fun PhonePlaybackScreen(
             }
             speedText = "${trafficSpeedCalculator.getNetworkSpeed()} kb/s"
             delay(800L)
-        }
-    }
-
-    LaunchedEffect(watchTogetherSession, player, videoIndex) {
-        val session = watchTogetherSession ?: return@LaunchedEffect
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (isActive) {
-                if (loadedEpisodeIndex != videoIndex ||
-                    (context as? VideoPlaybackActivity)?.isSwitchingOperationMode == true
-                ) {
-                    delay(1000L)
-                    continue
-                }
-                when (session.role) {
-                    WatchTogetherRole.Host -> {
-                        watchTogetherViewModel.publishHostState(
-                            videoDetail = videoDetail,
-                            episodeIndex = videoIndex,
-                            positionMs = player.currentPosition,
-                            durationMs = player.duration.coerceAtLeast(0L),
-                            playbackRate = player.playbackParameters.speed,
-                            paused = !player.playWhenReady
-                        )
-                    }
-
-                    WatchTogetherRole.Member -> {
-                        val state = watchTogetherViewModel.refreshRoomState(session.roomCode)
-                        if (state != null) {
-                            if (state.episodeIndex != videoIndex) {
-                                player.pause()
-                                viewModel.changePlayVideoIndex(state.episodeIndex)
-                            } else {
-                                val targetPosition = state.estimatedPositionAt(System.currentTimeMillis())
-                                val thresholdMs = if (state.paused) 200L else 1000L
-                                if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
-                                    player.seekTo(targetPosition)
-                                }
-                                if (state.paused && player.playWhenReady) {
-                                    player.pause()
-                                } else if (!state.paused && !player.playWhenReady) {
-                                    player.play()
-                                }
-                            }
-                        }
-                    }
-                }
-                delay(1000L)
-            }
         }
     }
 
@@ -351,8 +287,7 @@ fun PhonePlaybackScreen(
                     player.pause()
                     viewModel.playNextEpisodeIfExists()
                 },
-                onChooseEpisode = { showEpisodeDialog = true },
-                onWatchTogether = { showWatchTogetherDialog = true }
+                onChooseEpisode = { showEpisodeDialog = true }
             )
         }
 
@@ -409,41 +344,7 @@ fun PhonePlaybackScreen(
         )
     }
 
-    if (showWatchTogetherDialog) {
-        WatchTogetherDialog(
-            session = watchTogetherSession,
-            errorText = watchTogetherError,
-            onDismiss = { showWatchTogetherDialog = false },
-            onCreateRoom = {
-                coroutineScope.launch {
-                    runCatching {
-                        watchTogetherViewModel.createRoom(
-                            videoDetail = videoDetail,
-                            episodeIndex = videoIndex,
-                            positionMs = player.currentPosition,
-                            durationMs = player.duration.coerceAtLeast(0L),
-                            playbackRate = player.playbackParameters.speed,
-                            paused = !player.isPlaying
-                        )
-                    }.onFailure {
-                        Toast.makeText(
-                            context,
-                            it.message ?: "创建一起看房间失败",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            },
-            onJoinRoom = {
-                WatchTogetherJoinActivity.navigateTo(context)
-                showWatchTogetherDialog = false
-            },
-            onLeaveRoom = {
-                watchTogetherViewModel.leaveRoom()
-                showWatchTogetherDialog = false
-            }
-        )
-    }
+
 }
 
 @Composable
@@ -456,8 +357,7 @@ private fun PhonePlaybackTopControls(
     onExit: () -> Unit,
     onReplay: () -> Unit,
     onNext: () -> Unit,
-    onChooseEpisode: () -> Unit,
-    onWatchTogether: () -> Unit
+    onChooseEpisode: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -492,12 +392,9 @@ private fun PhonePlaybackTopControls(
             }
         }
         IconButton(
-            onClick = onWatchTogether,
+            onClick = onReplay,
             modifier = if (showEpisodeChooser) Modifier else Modifier.focusRequester(firstActionFocusRequester)
         ) {
-            Icon(Icons.Default.Groups, contentDescription = "watch together", tint = Color.White)
-        }
-        IconButton(onClick = onReplay) {
             Icon(Icons.Default.Replay, contentDescription = "replay", tint = Color.White)
         }
         OperationModeButton(tint = Color.White)
@@ -511,132 +408,5 @@ private fun PhonePlaybackTopControls(
         IconButton(onClick = onExit) {
             Icon(Icons.Default.Close, contentDescription = "close", tint = Color.White)
         }
-    }
-}
-
-@Composable
-private fun WatchTogetherDialog(
-    session: WatchTogetherSession?,
-    errorText: String?,
-    onDismiss: () -> Unit,
-    onCreateRoom: () -> Unit,
-    onJoinRoom: () -> Unit,
-    onLeaveRoom: () -> Unit
-) {
-    if (session != null) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = {
-                WatchTogetherDialogTitle(text = "一起看房间")
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            WatchTogetherStatusRow(label = "房间码", value = session.roomCode)
-                            WatchTogetherStatusRow(label = "成员", value = "${session.memberCount}")
-                        }
-                    }
-                    errorText?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = onDismiss) {
-                    Text("关闭")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onLeaveRoom) {
-                    Text("退出房间")
-                }
-            }
-        )
-        return
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            WatchTogetherDialogTitle(text = "一起看")
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "同步当前影片、集数和播放进度",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                errorText?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onCreateRoom) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("创建房间")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onJoinRoom) {
-                Icon(
-                    imageVector = Icons.Default.Groups,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("加入房间")
-            }
-        }
-    )
-}
-
-@Composable
-private fun WatchTogetherDialogTitle(text: String) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.Groups, contentDescription = null)
-        Text(text = text)
-    }
-}
-
-@Composable
-private fun WatchTogetherStatusRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Text(text = value, style = MaterialTheme.typography.titleMedium)
     }
 }

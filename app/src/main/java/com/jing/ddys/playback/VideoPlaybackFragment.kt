@@ -2,7 +2,6 @@ package com.jing.ddys.playback
 
 import TrafficSpeedCalculatorBandwidthMeter
 import android.graphics.Color
-import android.app.AlertDialog
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -41,7 +40,6 @@ import androidx.media3.ui.leanback.LeanbackPlayerAdapter
 import com.jing.bilibilitv.playback.GlueActionCallback
 import com.jing.bilibilitv.playback.PlayListAction
 import com.jing.bilibilitv.playback.ReplayAction
-import com.jing.bilibilitv.playback.WatchTogetherAction
 import com.jing.bilibilitv.playback.OperationModeAction
 import com.jing.ddys.DdysApplication
 import com.jing.ddys.R
@@ -52,10 +50,6 @@ import com.jing.ddys.ext.showShortToast
 import com.jing.ddys.repository.HttpUtil
 import com.jing.ddys.repository.Resource
 import com.jing.ddys.repository.VideoDetailInfo
-import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
-import com.jing.ddys.watchtogether.WatchTogetherRole
-import com.jing.ddys.watchtogether.WatchTogetherSession
-import com.jing.ddys.watchtogether.WatchTogetherViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -76,7 +70,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
     private lateinit var viewModel: PlaybackViewModel
 
-    private lateinit var watchTogetherViewModel: WatchTogetherViewModel
 
     private var exoplayer: ExoPlayer? = null
 
@@ -90,8 +83,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
     private lateinit var progressBarBinding: PlayerProgressBarLayoutBinding
 
-    private var watchTogetherSyncJob: Job? = null
-    private var applyingRemoteWatchTogetherState = false
     private var loadedEpisodeIndex: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,7 +91,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             requireActivity().intent.getSerializableExtra(VideoPlaybackActivity.VIDEO_KEY) as VideoDetailInfo
         playEpIndex = requireActivity().intent.getIntExtra(VideoPlaybackActivity.PLAY_INDEX, 0)
         viewModel = getActivityViewModel { parametersOf(videoDetail, playEpIndex) }
-        watchTogetherViewModel = getActivityViewModel()
         isControlsOverlayAutoHideEnabled = true
     }
 
@@ -208,13 +198,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
                         Resource.Loading -> mProgressBarManager.show()
                     }
-                }
-            }
-        }
-        lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                watchTogetherViewModel.session.collectLatest { session ->
-                    startWatchTogetherSyncLoop(session)
                 }
             }
         }
@@ -357,7 +340,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             onCreatePrimaryAction = {
                 it.add(PlayListAction(requireContext()))
                 it.add(ReplayAction(requireContext()))
-                it.add(WatchTogetherAction(requireContext()))
             },
             // Leanback shows at most seven primary controls; keep this entry visible separately.
             onCreateSecondaryAction = {
@@ -378,7 +360,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             isControlsOverlayAutoHideEnabled = true
             addActionCallback(replayActionCallback)
             addActionCallback(changePlayVideoActionCallback)
-            addActionCallback(watchTogetherActionCallback)
             addActionCallback(object : GlueActionCallback {
                 override fun support(action: Action) = action is OperationModeAction
 
@@ -425,15 +406,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
 
     }
 
-    private val watchTogetherActionCallback = object : GlueActionCallback {
-        override fun support(action: Action): Boolean = action is WatchTogetherAction
-
-        override fun onAction(action: Action) {
-            openWatchTogetherDialog()
-        }
-    }
-
-
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.keyCode == KeyEvent.KEYCODE_BACK) {
             if (isControlsOverlayVisible) {
@@ -468,119 +440,6 @@ class VideoPlaybackFragment : VideoSupportFragment() {
             return true
         }
         return false
-    }
-
-    private fun openWatchTogetherDialog() {
-        val session = watchTogetherViewModel.session.value
-        if (session != null) {
-            showWatchTogetherStatusDialog(session)
-            return
-        }
-        AlertDialog.Builder(requireContext())
-            .setTitle("一起看")
-            .setItems(arrayOf("创建房间", "加入房间")) { _, which ->
-                when (which) {
-                    0 -> createWatchTogetherRoom()
-                    1 -> WatchTogetherJoinActivity.navigateTo(requireContext())
-                }
-            }
-            .show()
-    }
-
-    private fun createWatchTogetherRoom() {
-        val player = exoplayer ?: return
-        lifecycleScope.launch {
-            runCatching {
-                watchTogetherViewModel.createRoom(
-                    videoDetail = videoDetail,
-                    episodeIndex = viewModel.videoIndex.value,
-                    positionMs = player.currentPosition,
-                    durationMs = player.duration.coerceAtLeast(0L),
-                    playbackRate = player.playbackParameters.speed,
-                    paused = !player.isPlaying
-                )
-            }.onSuccess {
-                showWatchTogetherStatusDialog(it)
-            }.onFailure {
-                requireContext().showLongToast(it.message ?: "创建一起看房间失败")
-            }
-        }
-    }
-
-    private fun showWatchTogetherStatusDialog(session: WatchTogetherSession) {
-        AlertDialog.Builder(requireContext())
-            .setTitle("一起看房间")
-            .setMessage("房间码: ${session.roomCode}\n成员: ${session.memberCount}")
-            .setPositiveButton("关闭", null)
-            .setNegativeButton("退出房间") { _, _ ->
-                watchTogetherViewModel.leaveRoom()
-            }
-            .show()
-    }
-
-    private fun startWatchTogetherSyncLoop(session: WatchTogetherSession?) {
-        watchTogetherSyncJob?.cancel()
-        watchTogetherSyncJob = null
-        if (session == null) {
-            return
-        }
-        watchTogetherSyncJob = viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                while (isActive) {
-                    if (loadedEpisodeIndex != viewModel.videoIndex.value ||
-                        (activity as? VideoPlaybackActivity)?.isSwitchingOperationMode == true
-                    ) {
-                        delay(1000L)
-                        continue
-                    }
-                    when (session.role) {
-                        WatchTogetherRole.Host -> publishWatchTogetherHostState()
-                        WatchTogetherRole.Member -> applyWatchTogetherMemberState(session.roomCode)
-                    }
-                    delay(1000L)
-                }
-            }
-        }
-    }
-
-    private suspend fun publishWatchTogetherHostState() {
-        if (applyingRemoteWatchTogetherState) {
-            return
-        }
-        val player = exoplayer ?: return
-        watchTogetherViewModel.publishHostState(
-            videoDetail = videoDetail,
-            episodeIndex = viewModel.videoIndex.value,
-            positionMs = player.currentPosition,
-            durationMs = player.duration.coerceAtLeast(0L),
-            playbackRate = player.playbackParameters.speed,
-            paused = !player.playWhenReady
-        )
-    }
-
-    private suspend fun applyWatchTogetherMemberState(roomCode: String) {
-        val player = exoplayer ?: return
-        val state = watchTogetherViewModel.refreshRoomState(roomCode) ?: return
-        applyingRemoteWatchTogetherState = true
-        try {
-            if (state.episodeIndex != viewModel.videoIndex.value) {
-                player.pause()
-                viewModel.changePlayVideoIndex(state.episodeIndex)
-                return
-            }
-            val targetPosition = state.estimatedPositionAt(System.currentTimeMillis())
-            val thresholdMs = if (state.paused) 200L else 1000L
-            if (kotlin.math.abs(player.currentPosition - targetPosition) > thresholdMs) {
-                player.seekTo(targetPosition)
-            }
-            if (state.paused && player.playWhenReady) {
-                player.pause()
-            } else if (!state.paused && !player.playWhenReady) {
-                player.play()
-            }
-        } finally {
-            applyingRemoteWatchTogetherState = false
-        }
     }
 
     private fun openPlayListDialogAndChoose() {

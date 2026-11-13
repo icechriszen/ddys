@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -79,7 +78,6 @@ import com.jing.ddys.setting.SettingsActivity
 import com.jing.ddys.setting.VideoSourceLoginActivity
 import com.jing.ddys.update.UpdateState
 import com.jing.ddys.update.UpdateViewModel
-import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -215,16 +213,6 @@ fun TopNav(
                                 Icon(
                                     imageVector = Icons.Default.History,
                                     contentDescription = "history"
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    WatchTogetherJoinActivity.navigateTo(context)
-                                }, modifier = Modifier.restorableFocus()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Groups,
-                                    contentDescription = "watch together"
                                 )
                             }
                             if (showUpdateButton) {

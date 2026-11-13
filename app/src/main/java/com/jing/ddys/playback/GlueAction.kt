@@ -17,12 +17,6 @@ class PlayListAction(context: Context) : Action(30) {
     }
 }
 
-class WatchTogetherAction(context: Context) : Action(40) {
-    init {
-        icon = ContextCompat.getDrawable(context, R.drawable.watch_together)
-    }
-}
-
 class OperationModeAction(context: Context) : Action(50) {
     init {
         icon = ContextCompat.getDrawable(context, R.drawable.operation_mode_phone)

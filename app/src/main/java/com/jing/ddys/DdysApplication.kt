@@ -24,8 +24,6 @@ import com.jing.ddys.update.ApkInstallLauncher
 import com.jing.ddys.update.UpdateManager
 import com.jing.ddys.update.UpdateRepository
 import com.jing.ddys.update.UpdateViewModel
-import com.jing.ddys.watchtogether.WatchTogetherClient
-import com.jing.ddys.watchtogether.WatchTogetherViewModel
 import okhttp3.Call
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -79,7 +77,6 @@ class DdysApplication : Application(), ImageLoaderFactory {
         viewModelOf(::PlayHistoryViewModel)
         viewModelOf(::SettingsViewModel)
         viewModelOf(::UpdateViewModel)
-        viewModelOf(::WatchTogetherViewModel)
 
     }
 
@@ -120,7 +117,6 @@ class DdysApplication : Application(), ImageLoaderFactory {
         single { ApkDownloader(this@DdysApplication) }
         single { ApkInstallLauncher() }
         single { UpdateManager(this@DdysApplication, get(), get(), get()) }
-        single { WatchTogetherClient() }
 
     }
 

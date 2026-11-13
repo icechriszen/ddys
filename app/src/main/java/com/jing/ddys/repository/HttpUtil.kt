@@ -39,6 +39,9 @@ object HttpUtil {
     const val USER_AGENT =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36"
 
+    val requestUserAgent: String
+        get() = VideoSourceAuth.browserUserAgent() ?: USER_AGENT
+
     val VIDEO_BASE_URL: String
         get() = VideoSourceAuth.videoBaseUrl
 
@@ -387,9 +390,8 @@ object HttpUtil {
         builder.addInterceptor(Interceptor { chain ->
             val originalReq = chain.request()
             val reqBuilder = originalReq.newBuilder().header(
-                "user-agent", USER_AGENT
+                "user-agent", requestUserAgent
             )
-            appendSourceAuthCookieIfNeeded(originalReq, reqBuilder)
             if (originalReq.header("referer") == null) {
                 reqBuilder.header("referer", "$BASE_URL/true-sight/")
             }
@@ -397,6 +399,13 @@ object HttpUtil {
                 chain.proceed(it)
             }
         })
+        // Apply source cookies per network hop so redirects cannot forward them to a CDN.
+        builder.addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val authenticated = request.newBuilder()
+            appendSourceAuthCookieIfNeeded(request, authenticated)
+            chain.proceed(authenticated.build())
+        }
         if (proxySettings.proxyEnabled && proxySettings.proxyHost.isNotEmpty()) {
             builder.proxy(
                 Proxy(
@@ -420,10 +429,10 @@ object HttpUtil {
         originalReq: Request,
         reqBuilder: Request.Builder
     ) {
-        if (originalReq.url.host != VideoSourceAuth.sourceHost()) {
+        if (!SourceLoginPolicy.sameOrigin(originalReq.url, BASE_URL.toHttpUrl())) {
             return
         }
-        val authCookie = VideoSourceAuth.getAuthCookieHeader()
+        val authCookie = VideoSourceAuth.getAuthCookieHeader(originalReq.url.toString())
         if (authCookie.isBlank()) {
             return
         }

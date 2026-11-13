@@ -6,19 +6,14 @@ plugins {
 
 android {
     namespace = "com.jing.ddys"
+    sourceSets.getByName("test").resources.srcDir(rootProject.file("test-fixtures"))
     compileSdk = 34
-    val watchTogetherBaseUrl =
-        providers.gradleProperty("WATCH_TOGETHER_BASE_URL")
-            .orElse(providers.environmentVariable("WATCH_TOGETHER_BASE_URL"))
-            .orElse("")
-            .get()
-
     defaultConfig {
         applicationId = "com.jing.ddys"
         minSdk = 21
         targetSdk = 33
-        versionCode = 26
-        versionName = "1.5.1"
+        versionCode = 28
+        versionName = "1.6.1"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -27,11 +22,7 @@ android {
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
         }
-        buildConfigField(
-            "String",
-            "WATCH_TOGETHER_BASE_URL",
-            "\"${watchTogetherBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-        )
+
 
     }
     compileOptions {
@@ -109,6 +100,8 @@ dependencies {
     implementation("io.insert-koin:koin-androidx-compose:3.4.5")
 
 
+    implementation("com.google.zxing:core:3.5.3")
+
     // okhttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
@@ -128,6 +121,7 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("org.robolectric:robolectric:4.11.1")
 

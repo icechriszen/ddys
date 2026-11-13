@@ -10,6 +10,25 @@ object VideoSourceLoginScripts {
         return """
             (function() {
                 var password = $quotedPassword;
+                // Cap owns its proof, button state and browser checks. Do not apply
+                // legacy input/key events, polling or ALTCHA patches to its page.
+                if (document.querySelector('cap-widget')) {
+                    var input = document.querySelector('input[name="ddys_protect_password"]');
+                    if (input && !input.value) input.value = password;
+                    if (!document.getElementById('ddys-verification-error')) {
+                        var note = document.createElement('p');
+                        note.id = 'ddys-verification-error';
+                        note.setAttribute('role', 'status');
+                        document.body.appendChild(note);
+                        document.addEventListener('error', function(event) {
+                            var detail = event.detail;
+                            if (detail && detail.isCap) note.textContent = '验证未完成：' +
+                                String(detail.message || '').slice(0, 240) + '（' + String(detail.code || '').slice(0, 64) + '）';
+                        });
+                    }
+                    return;
+                }
+
                 var formSelector = 'form#loginform, form[name="loginform"]';
                 var passwordSelector = 'input[name="password_protected_pwd"], input[name="ddys_protect_password"]';
                 var captchaSelector = 'input[name="captcha_code"]';
@@ -291,4 +310,13 @@ object VideoSourceLoginScripts {
             })();
         """.trimIndent()
     }
+    fun buildReadPageStateScript(): String = """
+        (function() {
+            return JSON.stringify({
+                login: !!document.querySelector('cap-widget, input[name="ddys_protect_password"], input[name="password_protected_pwd"], .ddys-protect-gate'),
+                catalog: !!document.querySelector('article, .post-box-title')
+            });
+        })();
+    """.trimIndent()
+
 }

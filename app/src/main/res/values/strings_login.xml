@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_qr_title">手机扫码登录</string>
+    <string name="login_qr_instructions">手机与电视连接同一 Wi-Fi，用相机扫码，在 Safari 或浏览器中完成验证并点“进入”。</string>
+    <string name="login_qr_expiry">验证成功后电视自动继续。二维码 10 分钟内有效，离开此页即失效。</string>
+    <string name="login_qr_preparing">正在准备二维码…</string>
+    <string name="login_qr_refresh">重新生成二维码</string>
+    <string name="login_on_device">本机网页登录</string>
+    <string name="login_back">返回</string>
+    <string name="login_qr_image">手机登录二维码</string>
+    <string name="login_qr_expired">二维码已过期，请重新生成。</string>
+    <string name="login_qr_waiting">等待手机完成验证…</string>
+    <string name="login_qr_failed">无法启动扫码连接，请检查 Wi-Fi 后重试。</string>
+    <string name="login_webview_unavailable">当前设备没有可用 WebView，请使用手机扫码登录</string>
+    <string name="login_title">网站登录</string>
+    <string name="login_web_instructions">请完成网站人机验证，再点“进入”。电视遥控器不便操作时可用手机扫码。</string>
+    <string name="login_use_phone">改用手机扫码登录</string>
+    <string name="login_success">网站登录成功</string>
+</resources>

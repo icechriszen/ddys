@@ -60,7 +60,6 @@ import com.jing.ddys.search.SearchActivity
 import com.jing.ddys.setting.SettingsActivity
 import com.jing.ddys.setting.VideoSourceLoginActivity
 import com.jing.ddys.update.UpdateViewModel
-import com.jing.ddys.watchtogether.WatchTogetherJoinActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,10 +94,6 @@ fun PhoneMainScreen(
                         DropdownMenuItem(text = { Text(stringResource(R.string.playback_history)) }, onClick = {
                             showMoreActions = false
                             PlayHistoryActivity.navigateTo(context)
-                        })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.watch_together_title)) }, onClick = {
-                            showMoreActions = false
-                            WatchTogetherJoinActivity.navigateTo(context)
                         })
                         if (updateState.hasVisibleUpdate()) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.software_update_title)) }, onClick = {
